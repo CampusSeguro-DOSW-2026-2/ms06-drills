@@ -1,0 +1,26 @@
+# Local PostgreSQL for MS06 - Events.
+# Run it from the infra/ folder:  docker compose up -d
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ms06-events-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-campusseguro_events}
+      POSTGRES_USER: ${DB_USER:-campusseguro}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-campusseguro}
+    ports:
+      # Host port 5433 (not 5432) so it does not clash with other local PostgreSQL containers.
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - ms06-events-data:/var/lib/postgresql/data
+      # Scripts in this folder run once, the first time the database is created.
+      - ../database:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-campusseguro} -d ${DB_NAME:-campusseguro_events}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  ms06-events-data:
