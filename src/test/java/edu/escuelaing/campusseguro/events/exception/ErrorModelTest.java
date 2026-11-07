@@ -9,6 +9,12 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 
+
+/**
+ * Class that test the ErrorModel file
+ * ErrorModelTest
+ */
+
 class ErrorModelTest {
 
     private final Instant now = Instant.parse("2026-11-07T12:00:00Z");

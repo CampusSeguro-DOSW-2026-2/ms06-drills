@@ -16,6 +16,11 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import tools.jackson.databind.json.JsonMapper;
 
+/**
+ * Class that test the ErrorWriters file
+ * SecurityErrorWritersTest
+ */
+
 class SecurityErrorWritersTest {
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-11-07T12:00:00Z"), ZoneOffset.UTC);

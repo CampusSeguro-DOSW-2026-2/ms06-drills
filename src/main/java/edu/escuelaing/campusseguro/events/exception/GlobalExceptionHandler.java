@@ -25,8 +25,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /**
- * Traduce cualquier excepción a un {@link ErrorResponse} con un {@link ErrorCode}.
- * Las excepciones de dominio se agregan aquí junto con la historia que las usa.
+ * Class that translates an exception in a {@link ErrorResponse} with a {@link ErrorCode}.
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {

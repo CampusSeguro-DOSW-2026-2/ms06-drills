@@ -13,8 +13,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Escribe el cuerpo de error JSON en respuestas que se generan fuera de los
- * controladores (filtros de seguridad: 401 y 403).
+ * Class that writes the JSON's body for an error
  */
 @Component
 public class ErrorResponseWriter {

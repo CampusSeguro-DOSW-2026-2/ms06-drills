@@ -8,6 +8,11 @@ import java.util.EnumSet;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
+/**
+ * Class that test the Role file
+ * RoleTest
+ */
+
 class RoleTest {
 
     @Test

@@ -3,6 +3,10 @@ package edu.escuelaing.campusseguro.events.exception;
 import java.time.Instant;
 import java.util.List;
 
+/**
+ * Record that expose the required information of an error
+ */
+
 public record ErrorResponse(
         Instant timestamp,
         int status,

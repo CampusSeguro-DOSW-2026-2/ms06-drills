@@ -10,6 +10,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.oauth2.jwt.Jwt;
 
+/**
+ * Class that test the JwtRoleConverter file
+ * JwtRoleConverterTest
+ */
+
 class JwtRoleConverterTest {
 
     private Jwt jwtWith(String claimName, Object claimValue) {

@@ -36,6 +36,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.ServletWebRequest;
 
+/**
+ * Class that test the GlobalExceptionHandler file
+ * GlobalExceptionHandlerTest
+ */
+
 class GlobalExceptionHandlerTest {
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-11-07T12:00:00Z"), ZoneOffset.UTC);

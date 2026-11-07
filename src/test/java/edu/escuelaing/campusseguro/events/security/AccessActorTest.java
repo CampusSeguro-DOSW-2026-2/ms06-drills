@@ -10,6 +10,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
+/**
+ * Class thar test the AccessActor file
+ * AccessActorTest
+ */
+
 class AccessActorTest {
 
     @Test
