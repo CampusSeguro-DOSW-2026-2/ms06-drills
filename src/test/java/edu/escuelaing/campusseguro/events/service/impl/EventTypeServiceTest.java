@@ -1,5 +1,13 @@
-package edu.escuelaing.campusseguro.events.service;
+package edu.escuelaing.campusseguro.events.service.impl;
 
+import edu.escuelaing.campusseguro.events.dto.response.EventTypeResponse;
+import edu.escuelaing.campusseguro.events.entity.EventTypeEntity;
+import edu.escuelaing.campusseguro.events.exception.BusinessException;
+import edu.escuelaing.campusseguro.events.exception.ErrorCode;
+import edu.escuelaing.campusseguro.events.repository.EventTypeRepository;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -9,20 +17,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import edu.escuelaing.campusseguro.events.dto.EventTypeResponse;
-import edu.escuelaing.campusseguro.events.entity.EventTypeEntity;
-import edu.escuelaing.campusseguro.events.exception.BusinessException;
-import edu.escuelaing.campusseguro.events.exception.ErrorCode;
-import edu.escuelaing.campusseguro.events.repository.EventTypeRepository;
-import java.util.List;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
+
 
 /** Tests the type catalog with a mocked repository. */
 class EventTypeServiceTest {
 
     private final EventTypeRepository types = mock(EventTypeRepository.class);
-    private final EventTypeService service = new EventTypeService(types);
+    private final EventTypeServiceImpl service = new EventTypeServiceImpl(types);
 
     private EventTypeEntity type(String code, String name) {
         EventTypeEntity entity = new EventTypeEntity();

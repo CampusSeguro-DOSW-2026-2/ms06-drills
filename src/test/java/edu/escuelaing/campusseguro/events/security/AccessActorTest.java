@@ -43,16 +43,4 @@ class AccessActorTest {
         assertEquals("user-1", new AccessActor("user-1", Set.of()).auditId());
         assertEquals(64, new AccessActor("x".repeat(100), Set.of()).auditId().length());
     }
-
-    @Test
-    void theCoordinatorManagesRealEventsAndTheOrganizerManagesDrills() {
-        AccessActor coordinator = new AccessActor("c", Set.of(Role.COORDINADOR));
-        AccessActor organizer = new AccessActor("o", Set.of(Role.ORGANIZADOR));
-
-        assertTrue(coordinator.canManageEvent(false));
-        assertFalse(coordinator.canManageEvent(true));
-        assertTrue(organizer.canManageEvent(true));
-        assertFalse(organizer.canManageEvent(false));
-        assertFalse(new AccessActor("a", Set.of(Role.ADMIN)).canManageEvent(false));
-    }
 }

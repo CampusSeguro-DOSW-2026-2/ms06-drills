@@ -5,9 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import edu.escuelaing.campusseguro.events.client.alert.StubAlertGateway;
 import edu.escuelaing.campusseguro.events.client.checkin.StubCheckInGateway;
-import edu.escuelaing.campusseguro.events.dto.CreateEventRequest;
-import edu.escuelaing.campusseguro.events.dto.EventResponse;
-import edu.escuelaing.campusseguro.events.dto.ScopeItemRequest;
+import edu.escuelaing.campusseguro.events.dto.request.CreateEventRequest;
+import edu.escuelaing.campusseguro.events.dto.response.EventResponse;
+import edu.escuelaing.campusseguro.events.dto.request.ScopeItemRequest;
 import edu.escuelaing.campusseguro.events.entity.EventStateHistoryEntity;
 import edu.escuelaing.campusseguro.events.entity.enums.EventAlertPurpose;
 import edu.escuelaing.campusseguro.events.entity.enums.EventStatus;

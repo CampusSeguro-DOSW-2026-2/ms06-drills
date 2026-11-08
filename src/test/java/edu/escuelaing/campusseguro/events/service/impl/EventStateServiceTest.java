@@ -1,14 +1,4 @@
-package edu.escuelaing.campusseguro.events.service;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+package edu.escuelaing.campusseguro.events.service.impl;
 
 import edu.escuelaing.campusseguro.events.entity.EventEntity;
 import edu.escuelaing.campusseguro.events.entity.EventStateHistoryEntity;
@@ -17,6 +7,7 @@ import edu.escuelaing.campusseguro.events.exception.InvalidStateTransitionExcept
 import edu.escuelaing.campusseguro.events.exception.ResourceNotFoundException;
 import edu.escuelaing.campusseguro.events.repository.EventRepository;
 import edu.escuelaing.campusseguro.events.repository.EventStateHistoryRepository;
+import edu.escuelaing.campusseguro.events.service.EventStateMachine;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -27,6 +18,17 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+
 
 /** Tests status changes, their dates and the history, with mocked repositories. */
 class EventStateServiceTest {
@@ -35,7 +37,7 @@ class EventStateServiceTest {
 
     private final EventRepository events = mock(EventRepository.class);
     private final EventStateHistoryRepository history = mock(EventStateHistoryRepository.class);
-    private final EventStateService service = new EventStateService(
+    private final EventStateServiceImpl service = new EventStateServiceImpl(
             events, history, new EventStateMachine(), Clock.fixed(NOW, ZoneOffset.UTC));
 
     private final UUID id = UUID.randomUUID();

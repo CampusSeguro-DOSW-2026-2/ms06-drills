@@ -1,19 +1,4 @@
-package edu.escuelaing.campusseguro.events.service;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+package edu.escuelaing.campusseguro.events.service.impl;
 
 import edu.escuelaing.campusseguro.events.client.EventStatePayload;
 import edu.escuelaing.campusseguro.events.client.ScopeRef;
@@ -29,6 +14,8 @@ import edu.escuelaing.campusseguro.events.entity.enums.ScopeType;
 import edu.escuelaing.campusseguro.events.exception.ExternalServiceUnavailableException;
 import edu.escuelaing.campusseguro.events.repository.EventAlertRepository;
 import edu.escuelaing.campusseguro.events.security.Role;
+import edu.escuelaing.campusseguro.events.service.EventStateService;
+import edu.escuelaing.campusseguro.events.service.SchedulingOutcome;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
@@ -38,9 +25,25 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.springframework.test.util.ReflectionTestUtils;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-/** Tests the scheduling order and the undo steps with mocked gateways. */
-class EventSchedulingServiceTest {
+
+
+/** Tests the lifecycle order and the undo steps with mocked gateways. */
+class EventLifecycleServiceTest {
 
     private static final Instant START = Instant.parse("2026-12-01T15:00:00Z");
 
@@ -49,8 +52,8 @@ class EventSchedulingServiceTest {
     private final AlertGateway alerts = mock(AlertGateway.class);
     private final EventAlertRepository alertLinks = mock(EventAlertRepository.class);
     private final EventStateService stateService = mock(EventStateService.class);
-    private final EventSchedulingService service =
-            new EventSchedulingService(checkIn, brigade, alerts, alertLinks, stateService);
+    private final EventLifecycleServiceImpl service =
+            new EventLifecycleServiceImpl(checkIn, brigade, alerts, alertLinks, stateService);
 
     private final List<ScopeRef> scope = List.of(new ScopeRef(ScopeType.ZONE, "z1"));
     private final Set<Role> roles = Set.of(Role.ESTUDIANTE);

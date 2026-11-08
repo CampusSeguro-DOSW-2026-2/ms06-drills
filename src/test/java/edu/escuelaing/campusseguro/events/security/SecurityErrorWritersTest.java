@@ -16,11 +16,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import tools.jackson.databind.json.JsonMapper;
 
-/**
- * Class that test the ErrorWriters file
- * SecurityErrorWritersTest
- */
-
+/** Tests that security 401 and 403 are written in the standard error format. */
 class SecurityErrorWritersTest {
 
     private final Clock clock = Clock.fixed(Instant.parse("2026-11-07T12:00:00Z"), ZoneOffset.UTC);

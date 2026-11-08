@@ -8,11 +8,7 @@ import java.util.EnumSet;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
-/**
- * Class that test the Role file
- * RoleTest
- */
-
+/** Tests the 8 roles: abbreviations, COM membership and tolerant claim reading. */
 class RoleTest {
 
     @Test

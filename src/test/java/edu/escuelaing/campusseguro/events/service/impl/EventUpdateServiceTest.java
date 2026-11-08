@@ -1,18 +1,4 @@
-package edu.escuelaing.campusseguro.events.service;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+package edu.escuelaing.campusseguro.events.service.impl;
 
 import edu.escuelaing.campusseguro.events.client.EventStatePayload;
 import edu.escuelaing.campusseguro.events.client.alert.AlertCommand;
@@ -21,9 +7,9 @@ import edu.escuelaing.campusseguro.events.client.brigade.BrigadeGateway;
 import edu.escuelaing.campusseguro.events.client.campus.CampusGateway;
 import edu.escuelaing.campusseguro.events.client.checkin.CheckInGateway;
 import edu.escuelaing.campusseguro.events.client.identity.IdentityGateway;
-import edu.escuelaing.campusseguro.events.dto.CreateEventRequest;
-import edu.escuelaing.campusseguro.events.dto.EventResponse;
-import edu.escuelaing.campusseguro.events.dto.ScopeItemRequest;
+import edu.escuelaing.campusseguro.events.dto.request.CreateEventRequest;
+import edu.escuelaing.campusseguro.events.dto.request.ScopeItemRequest;
+import edu.escuelaing.campusseguro.events.dto.response.EventResponse;
 import edu.escuelaing.campusseguro.events.entity.EventAlertEntity;
 import edu.escuelaing.campusseguro.events.entity.EventEntity;
 import edu.escuelaing.campusseguro.events.entity.EventParticipantEntity;
@@ -43,7 +29,12 @@ import edu.escuelaing.campusseguro.events.repository.EventRepository;
 import edu.escuelaing.campusseguro.events.repository.EventScopeItemRepository;
 import edu.escuelaing.campusseguro.events.repository.EventTypeRepository;
 import edu.escuelaing.campusseguro.events.security.AccessActor;
+import edu.escuelaing.campusseguro.events.security.EventAccessPolicy;
 import edu.escuelaing.campusseguro.events.security.Role;
+import edu.escuelaing.campusseguro.events.mapper.EventMapper;
+import edu.escuelaing.campusseguro.events.service.EventLifecycleService;
+import edu.escuelaing.campusseguro.events.service.EventStateService;
+import edu.escuelaing.campusseguro.events.service.SchedulingOutcome;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -57,6 +48,21 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.util.ReflectionTestUtils;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+
 
 /** Tests the edit rules for each status with mocked repositories and gateways. */
 class EventUpdateServiceTest {
@@ -70,16 +76,17 @@ class EventUpdateServiceTest {
     private final EventScopeItemRepository scopeItems = mock(EventScopeItemRepository.class);
     private final EventParticipantRepository participants = mock(EventParticipantRepository.class);
     private final EventAlertRepository alertLinks = mock(EventAlertRepository.class);
-    private final EventSchedulingService scheduling = mock(EventSchedulingService.class);
+    private final EventLifecycleService lifecycle = mock(EventLifecycleService.class);
     private final EventStateService stateService = mock(EventStateService.class);
     private final CheckInGateway checkIn = mock(CheckInGateway.class);
     private final BrigadeGateway brigade = mock(BrigadeGateway.class);
     private final AlertGateway alerts = mock(AlertGateway.class);
     private final CampusGateway campus = mock(CampusGateway.class);
     private final IdentityGateway identity = mock(IdentityGateway.class);
-    private final EventUpdateService service = new EventUpdateService(
+    private final EventUpdateServiceImpl service = new EventUpdateServiceImpl(
             events, eventTypes, scopeItems, participants, alertLinks, campus, identity,
-            scheduling, stateService, checkIn, brigade, alerts, Clock.fixed(NOW, ZoneOffset.UTC));
+            lifecycle, stateService, checkIn, brigade, alerts, new EventAccessPolicy(), new EventMapper(),
+            Clock.fixed(NOW, ZoneOffset.UTC));
 
     private final AccessActor coordinator = new AccessActor("coord-1", Set.of(Role.COORDINADOR));
     private final AccessActor organizer = new AccessActor("org-1", Set.of(Role.ORGANIZADOR));
@@ -213,18 +220,18 @@ class EventUpdateServiceTest {
         assertEquals("New", response.name());
         assertEquals(EventStatus.DRAFT, response.status());
         verify(events).save(event);
-        verify(scheduling, never()).schedule(any(), any(), any(), anyString());
+        verify(lifecycle, never()).schedule(any(), any(), any(), anyString());
     }
 
     @Test
     void aDraftIsScheduledWhenItBecomesComplete() {
         givenEvent(EventStatus.DRAFT, null, false);
-        when(scheduling.schedule(any(), any(), any(), anyString()))
+        when(lifecycle.schedule(any(), any(), any(), anyString()))
                 .thenReturn(new SchedulingOutcome(true, List.of(), List.of()));
 
         service.update(id, request("Old", START, sismo.getId(), List.of("z1"), Set.of(Role.ESTUDIANTE)), coordinator);
 
-        verify(scheduling).schedule(event, List.of(new edu.escuelaing.campusseguro.events.client.ScopeRef(
+        verify(lifecycle).schedule(event, List.of(new edu.escuelaing.campusseguro.events.client.ScopeRef(
                 ScopeType.ZONE, "z1")), Set.of(Role.ESTUDIANTE), "coord-1");
         assertEquals(START, event.getScheduledStart());
     }

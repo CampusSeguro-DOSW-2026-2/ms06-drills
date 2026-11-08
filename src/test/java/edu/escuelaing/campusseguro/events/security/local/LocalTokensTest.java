@@ -22,11 +22,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 
-/**
- * Class that test the LocalTokens file
- * LocalTokensTest
- */
-
+/** Tests token generation and the endpoint that gives one per role. */
 class LocalTokensTest {
 
     private static final SecretKey KEY = new SecretKeySpec(

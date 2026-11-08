@@ -1,22 +1,10 @@
-package edu.escuelaing.campusseguro.events.service;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+package edu.escuelaing.campusseguro.events.service.impl;
 
 import edu.escuelaing.campusseguro.events.client.campus.CampusGateway;
 import edu.escuelaing.campusseguro.events.client.identity.IdentityGateway;
-import edu.escuelaing.campusseguro.events.dto.CreateEventRequest;
-import edu.escuelaing.campusseguro.events.dto.EventResponse;
-import edu.escuelaing.campusseguro.events.dto.ScopeItemRequest;
+import edu.escuelaing.campusseguro.events.dto.request.CreateEventRequest;
+import edu.escuelaing.campusseguro.events.dto.request.ScopeItemRequest;
+import edu.escuelaing.campusseguro.events.dto.response.EventResponse;
 import edu.escuelaing.campusseguro.events.entity.EventEntity;
 import edu.escuelaing.campusseguro.events.entity.EventScopeItemEntity;
 import edu.escuelaing.campusseguro.events.entity.EventTypeEntity;
@@ -30,7 +18,12 @@ import edu.escuelaing.campusseguro.events.repository.EventRepository;
 import edu.escuelaing.campusseguro.events.repository.EventScopeItemRepository;
 import edu.escuelaing.campusseguro.events.repository.EventTypeRepository;
 import edu.escuelaing.campusseguro.events.security.AccessActor;
+import edu.escuelaing.campusseguro.events.security.EventAccessPolicy;
 import edu.escuelaing.campusseguro.events.security.Role;
+import edu.escuelaing.campusseguro.events.mapper.EventMapper;
+import edu.escuelaing.campusseguro.events.service.EventLifecycleService;
+import edu.escuelaing.campusseguro.events.service.EventStateService;
+import edu.escuelaing.campusseguro.events.service.SchedulingOutcome;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -42,6 +35,19 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.util.ReflectionTestUtils;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+
 
 /** Tests the creation rules with mocked repositories and gateways. */
 class EventCreationServiceTest {
@@ -54,12 +60,12 @@ class EventCreationServiceTest {
     private final EventScopeItemRepository scopeItems = mock(EventScopeItemRepository.class);
     private final EventParticipantRepository participants = mock(EventParticipantRepository.class);
     private final EventStateService stateService = mock(EventStateService.class);
-    private final EventSchedulingService scheduling = mock(EventSchedulingService.class);
+    private final EventLifecycleService lifecycle = mock(EventLifecycleService.class);
     private final CampusGateway campus = mock(CampusGateway.class);
     private final IdentityGateway identity = mock(IdentityGateway.class);
-    private final EventCreationService service = new EventCreationService(
-            events, eventTypes, scopeItems, participants, stateService, scheduling, campus, identity,
-            Clock.fixed(NOW, ZoneOffset.UTC));
+    private final EventCreationServiceImpl service = new EventCreationServiceImpl(
+            events, eventTypes, scopeItems, participants, stateService, lifecycle, campus, identity,
+            new EventAccessPolicy(), new EventMapper(), Clock.fixed(NOW, ZoneOffset.UTC));
 
     private final AccessActor coordinator = new AccessActor("coord-1", Set.of(Role.COORDINADOR));
     private final AccessActor organizer = new AccessActor("org-1", Set.of(Role.ORGANIZADOR));
@@ -89,7 +95,7 @@ class EventCreationServiceTest {
             ReflectionTestUtils.setField(event, "id", UUID.randomUUID());
             return event;
         });
-        when(scheduling.schedule(any(), any(), any(), anyString()))
+        when(lifecycle.schedule(any(), any(), any(), anyString()))
                 .thenReturn(new SchedulingOutcome(true, List.of(), List.of()));
     }
 
@@ -112,14 +118,14 @@ class EventCreationServiceTest {
         assertEquals("coord-1", response.createdBy());
         assertTrue(response.warnings().isEmpty());
         verify(stateService).recordCreation(any(EventEntity.class), anyString());
-        verify(scheduling, never()).schedule(any(), any(), any(), anyString());
+        verify(lifecycle, never()).schedule(any(), any(), any(), anyString());
     }
 
     @Test
     void triesToScheduleWhenDateScopeAndRolesAreComplete() {
         service.create(request(Set.of(sismo.getId()), FUTURE, zone(), Set.of(Role.ESTUDIANTE)), coordinator);
 
-        verify(scheduling).schedule(any(EventEntity.class), any(), any(), anyString());
+        verify(lifecycle).schedule(any(EventEntity.class), any(), any(), anyString());
         verify(campus).validateScope(ScopeType.ZONE, List.of("z1"));
         verify(identity).validateRoles(Set.of(Role.ESTUDIANTE));
     }
@@ -128,20 +134,20 @@ class EventCreationServiceTest {
     void doesNotScheduleWithoutScope() {
         service.create(request(Set.of(sismo.getId()), FUTURE, null, Set.of(Role.ESTUDIANTE)), coordinator);
 
-        verify(scheduling, never()).schedule(any(), any(), any(), anyString());
+        verify(lifecycle, never()).schedule(any(), any(), any(), anyString());
     }
 
     @Test
     void doesNotScheduleWithoutParticipants() {
         service.create(request(Set.of(sismo.getId()), FUTURE, zone(), null), coordinator);
 
-        verify(scheduling, never()).schedule(any(), any(), any(), anyString());
+        verify(lifecycle, never()).schedule(any(), any(), any(), anyString());
     }
 
     @Test
     void includesTheWarningsOfTheSchedulingAttempt() {
-        when(scheduling.schedule(any(), any(), any(), anyString())).thenReturn(new SchedulingOutcome(
-                false, List.of(new edu.escuelaing.campusseguro.events.dto.EventWarning("SAVED_AS_DRAFT", "x")), List.of()));
+        when(lifecycle.schedule(any(), any(), any(), anyString())).thenReturn(new SchedulingOutcome(
+                false, List.of(new edu.escuelaing.campusseguro.events.dto.response.EventWarning("SAVED_AS_DRAFT", "x")), List.of()));
 
         EventResponse response = service.create(
                 request(Set.of(sismo.getId()), FUTURE, zone(), Set.of(Role.ESTUDIANTE)), coordinator);
@@ -241,7 +247,7 @@ class EventCreationServiceTest {
         assertEquals(EventStatus.DRAFT, response.status());
         assertTrue(response.scope().isEmpty());
         assertEquals("SCOPE_PENDING", response.warnings().get(0).code());
-        verify(scheduling, never()).schedule(any(), any(), any(), anyString());
+        verify(lifecycle, never()).schedule(any(), any(), any(), anyString());
     }
 
     @Test
@@ -255,12 +261,12 @@ class EventCreationServiceTest {
         assertEquals(EventStatus.DRAFT, response.status());
         assertTrue(response.participantRoles().isEmpty());
         assertEquals("PARTICIPANTS_PENDING", response.warnings().get(0).code());
-        verify(scheduling, never()).schedule(any(), any(), any(), anyString());
+        verify(lifecycle, never()).schedule(any(), any(), any(), anyString());
     }
 
     @Test
     void chiDownPropagatesSoNothingIsSaved() {
-        when(scheduling.schedule(any(), any(), any(), anyString()))
+        when(lifecycle.schedule(any(), any(), any(), anyString()))
                 .thenThrow(new ExternalServiceUnavailableException("MS04", new RuntimeException()));
 
         assertThrows(ExternalServiceUnavailableException.class, () -> service.create(
