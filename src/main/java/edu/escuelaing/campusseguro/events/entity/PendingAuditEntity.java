@@ -55,8 +55,7 @@ public class PendingAuditEntity extends BaseEntity {
     @Column(name = "sent_at")
     private Instant sentAt;
 
-    public UUID getId() {
-    }
+    public UUID getId() { return id; }
 
     public String getAction() { return action; }
     public void setAction(String action) { this.action = action; }

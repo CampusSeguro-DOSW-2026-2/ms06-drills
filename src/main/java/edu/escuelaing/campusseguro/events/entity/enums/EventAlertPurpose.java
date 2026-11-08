@@ -14,6 +14,4 @@ public enum EventAlertPurpose {
     EDIT,
     /** Tells participants the event finished or its conditions have been modified. */
     FINISH,
-    /** Tells coordinators and organizers the event could not start because another one was In progress */
-    START_BLOCKED
 }

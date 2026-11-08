@@ -26,12 +26,6 @@ public interface EventRepository extends JpaRepository<EventEntity, UUID> {
     @Query("select e from EventEntity e where e.id = :id")
     Optional<EventEntity> findForUpdate(@Param("id") UUID id);
 
-    /** Tells if any event exists in the given status (RN-9: one is In progress). */
-    boolean existsByStatus(EventStatus status);
-
-    /** Same as {@link #existsByStatus} but ignoring one event (the one trying to start). */
-    boolean existsByStatusAndIdNot(EventStatus status, UUID id);
-
     /** Events in the given status whose scheduled start time has arrived (start scheduler). */
     List<EventEntity> findByStatusAndScheduledStartLessThanEqual(EventStatus status, Instant moment);
 

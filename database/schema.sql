@@ -1,4 +1,4 @@
--- Schema of MS06 - Events
+-- Schema of MS06 - Events.
 
 -- Event type catalog. The code SIMULACRO makes an event a drill.
 CREATE TABLE IF NOT EXISTS event_types (
@@ -21,7 +21,6 @@ CREATE TABLE IF NOT EXISTS events (
     scheduled_start   timestamptz,
     started_at        timestamptz,
     ended_at          timestamptz,
-    start_blocked_at  timestamptz,
     created_by        varchar(64)   NOT NULL,
     version           bigint        NOT NULL,
     created_at        timestamptz   NOT NULL,

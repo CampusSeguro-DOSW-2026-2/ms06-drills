@@ -67,10 +67,6 @@ public class EventEntity extends BaseEntity {
     @Column(name = "ended_at")
     private Instant endedAt;
 
-    /** Time when the start was blocked by another In progress event; empty if it did not happen. */
-    @Column(name = "start_blocked_at")
-    private Instant startBlockedAt;
-
     /** User who created the event. */
     @Column(name = "created_by", nullable = false, length = 64)
     private String createdBy;
@@ -113,9 +109,6 @@ public class EventEntity extends BaseEntity {
 
     public Instant getEndedAt() { return endedAt; }
     public void setEndedAt(Instant endedAt) { this.endedAt = endedAt; }
-
-    public Instant getStartBlockedAt() { return startBlockedAt; }
-    public void setStartBlockedAt(Instant startBlockedAt) { this.startBlockedAt = startBlockedAt; }
 
     public String getCreatedBy() { return createdBy; }
     public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
