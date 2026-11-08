@@ -16,10 +16,24 @@ import edu.escuelaing.campusseguro.events.repository.EventAlertRepository;
 import edu.escuelaing.campusseguro.events.security.Role;
 import edu.escuelaing.campusseguro.events.service.EventStateService;
 import edu.escuelaing.campusseguro.events.service.SchedulingOutcome;
+import edu.escuelaing.campusseguro.events.entity.EventParticipantEntity;
+import edu.escuelaing.campusseguro.events.entity.EventScopeItemEntity;
+import edu.escuelaing.campusseguro.events.entity.EventStartFailureEntity;
+import edu.escuelaing.campusseguro.events.entity.enums.ExternalModule;
+import edu.escuelaing.campusseguro.events.repository.EventParticipantRepository;
+import edu.escuelaing.campusseguro.events.repository.EventRepository;
+import edu.escuelaing.campusseguro.events.repository.EventScopeItemRepository;
+import edu.escuelaing.campusseguro.events.repository.EventStartFailureRepository;
+import java.time.Clock;
+import java.time.ZoneOffset;
+import java.util.Optional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -46,14 +60,21 @@ import static org.mockito.Mockito.when;
 class EventLifecycleServiceTest {
 
     private static final Instant START = Instant.parse("2026-12-01T15:00:00Z");
+    private static final Instant NOW = Instant.parse("2026-12-01T15:00:05Z");
 
     private final CheckInGateway checkIn = mock(CheckInGateway.class);
     private final BrigadeGateway brigade = mock(BrigadeGateway.class);
     private final AlertGateway alerts = mock(AlertGateway.class);
     private final EventAlertRepository alertLinks = mock(EventAlertRepository.class);
     private final EventStateService stateService = mock(EventStateService.class);
-    private final EventLifecycleServiceImpl service =
-            new EventLifecycleServiceImpl(checkIn, brigade, alerts, alertLinks, stateService);
+    private final EventRepository events = mock(EventRepository.class);
+    private final EventScopeItemRepository scopeItems = mock(EventScopeItemRepository.class);
+    private final EventParticipantRepository participants = mock(EventParticipantRepository.class);
+    private final EventStartFailureRepository failures = mock(EventStartFailureRepository.class);
+    private final TransactionTemplate tx = new TransactionTemplate(mock(PlatformTransactionManager.class));
+    private final EventLifecycleServiceImpl service = new EventLifecycleServiceImpl(
+            checkIn, brigade, alerts, alertLinks, stateService, events, scopeItems, participants, failures, tx,
+            Clock.fixed(NOW, ZoneOffset.UTC));
 
     private final List<ScopeRef> scope = List.of(new ScopeRef(ScopeType.ZONE, "z1"));
     private final Set<Role> roles = Set.of(Role.ESTUDIANTE);
@@ -194,5 +215,186 @@ class EventLifecycleServiceTest {
         SchedulingOutcome outcome = service.schedule(event, scope, roles, "coord-1");
 
         assertFalse(outcome.scheduled());
+    }
+
+    // ----- starting (RF-EVE-05) -----
+
+    private EventEntity scheduledEvent(Instant start) {
+        EventEntity scheduled = new EventEntity();
+        ReflectionTestUtils.setField(scheduled, "id", UUID.randomUUID());
+        scheduled.setName("Scheduled drill");
+        scheduled.setSimulacro(true);
+        scheduled.setStatus(EventStatus.SCHEDULED);
+        scheduled.setScheduledStart(start);
+        when(events.findForUpdate(scheduled.getId())).thenReturn(Optional.of(scheduled));
+        return scheduled;
+    }
+
+    private void due(EventEntity... due) {
+        when(events.findByStatusAndScheduledStartLessThanEqual(EventStatus.SCHEDULED, NOW)).thenReturn(List.of(due));
+    }
+
+    private void withScopeRolesAndGeneralAlert(EventEntity target, String alertId) {
+        EventScopeItemEntity item = new EventScopeItemEntity();
+        item.setScopeType(ScopeType.ZONE);
+        item.setScopeRefId("z1");
+        when(scopeItems.findByEventId(target.getId())).thenReturn(List.of(item));
+        EventParticipantEntity participant = new EventParticipantEntity();
+        participant.setRole(Role.ESTUDIANTE);
+        when(participants.findByEventId(target.getId())).thenReturn(List.of(participant));
+        EventAlertEntity link = new EventAlertEntity();
+        link.setAlertId(alertId);
+        link.setPurpose(EventAlertPurpose.GENERAL);
+        when(alertLinks.findByEventIdAndPurpose(target.getId(), EventAlertPurpose.GENERAL)).thenReturn(List.of(link));
+    }
+
+    @Test
+    void startsADueEventAndTellsChiBeiAndAle() {
+        EventEntity due = scheduledEvent(START);
+        due(due);
+        withScopeRolesAndGeneralAlert(due, "alert-9");
+
+        assertEquals(1, service.startDueEvents());
+
+        verify(stateService).transition(due.getId(), EventStatus.IN_PROGRESS, "system", "Started automatically");
+        ArgumentCaptor<EventStatePayload> chi = ArgumentCaptor.forClass(EventStatePayload.class);
+        verify(checkIn).pushState(chi.capture());
+        assertEquals(EventStatus.IN_PROGRESS, chi.getValue().status());
+        assertEquals(List.of(new ScopeRef(ScopeType.ZONE, "z1")), chi.getValue().scope());
+        assertEquals(Set.of(Role.ESTUDIANTE), chi.getValue().invitedRoles());
+        verify(brigade).pushState(any(EventStatePayload.class));
+        verify(alerts).activate("alert-9");
+        verify(failures, never()).save(any());
+    }
+
+    @Test
+    void startsEveryDueEventOnItsOwn() {
+        EventEntity first = scheduledEvent(START);
+        EventEntity second = scheduledEvent(START.minusSeconds(60));
+        due(first, second);
+
+        assertEquals(2, service.startDueEvents());
+
+        verify(stateService).transition(first.getId(), EventStatus.IN_PROGRESS, "system", "Started automatically");
+        verify(stateService).transition(second.getId(), EventStatus.IN_PROGRESS, "system", "Started automatically");
+    }
+
+    @Test
+    void skipsAnEventThatWasEditedOrStartedMeanwhile() {
+        EventEntity backToDraft = scheduledEvent(START);
+        backToDraft.setStatus(EventStatus.DRAFT);
+        EventEntity movedToTheFuture = scheduledEvent(NOW.plusSeconds(3600));
+        EventEntity deleted = scheduledEvent(START);
+        when(events.findForUpdate(deleted.getId())).thenReturn(Optional.empty());
+        due(backToDraft, movedToTheFuture, deleted);
+
+        assertEquals(0, service.startDueEvents());
+
+        verify(stateService, never()).transition(any(), any(), anyString(), any());
+        verify(checkIn, never()).pushState(any());
+    }
+
+    @Test
+    void theEventStartsEvenIfChiBeiAndAleDoNotAnswer() {
+        EventEntity due = scheduledEvent(START);
+        due(due);
+        withScopeRolesAndGeneralAlert(due, "alert-9");
+        doThrow(down("MS04")).when(checkIn).pushState(any());
+        doThrow(down("MS05")).when(brigade).pushState(any());
+        doThrow(down("MS03")).when(alerts).activate(anyString());
+
+        assertEquals(1, service.startDueEvents());
+
+        verify(stateService).transition(due.getId(), EventStatus.IN_PROGRESS, "system", "Started automatically");
+        ArgumentCaptor<EventStartFailureEntity> saved = ArgumentCaptor.forClass(EventStartFailureEntity.class);
+        verify(failures, times(3)).save(saved.capture());
+        assertEquals(
+                Set.of(ExternalModule.CHI, ExternalModule.BEI, ExternalModule.ALE),
+                saved.getAllValues().stream().map(EventStartFailureEntity::getModule).collect(Collectors.toSet()));
+        saved.getAllValues().forEach(row -> {
+            assertEquals(1, row.getAttempts());
+            assertTrue(row.isOpen());
+            assertTrue(row.getLastError().contains("unavailable"));
+        });
+    }
+
+    @Test
+    void anErrorStartingOneEventDoesNotStopTheOthers() {
+        EventEntity broken = scheduledEvent(START);
+        when(events.findForUpdate(broken.getId())).thenThrow(new IllegalStateException("database error"));
+        EventEntity healthy = scheduledEvent(START);
+        due(broken, healthy);
+
+        assertEquals(1, service.startDueEvents());
+
+        verify(stateService).transition(healthy.getId(), EventStatus.IN_PROGRESS, "system", "Started automatically");
+    }
+
+    private EventStartFailureEntity openFailure(EventEntity target, ExternalModule module, int attempts) {
+        EventStartFailureEntity row = new EventStartFailureEntity();
+        ReflectionTestUtils.setField(row, "id", UUID.randomUUID());
+        row.setEventId(target.getId());
+        row.setModule(module);
+        row.setAttempts(attempts);
+        row.setLastError("down");
+        when(failures.findByResolvedAtIsNull()).thenReturn(List.of(row));
+        when(failures.findById(row.getId())).thenReturn(Optional.of(row));
+        when(failures.findByEventIdAndModule(target.getId(), module)).thenReturn(Optional.of(row));
+        return row;
+    }
+
+    @Test
+    void retryClosesTheCallWhenTheServiceAnswers() {
+        EventEntity running = scheduledEvent(START);
+        running.setStatus(EventStatus.IN_PROGRESS);
+        when(events.findById(running.getId())).thenReturn(Optional.of(running));
+        EventStartFailureEntity row = openFailure(running, ExternalModule.CHI, 1);
+
+        assertEquals(1, service.retryPendingStartCalls());
+
+        verify(checkIn).pushState(any(EventStatePayload.class));
+        verify(brigade, never()).pushState(any());
+        assertEquals(NOW, row.getResolvedAt());
+    }
+
+    @Test
+    void retryKeepsTheCallOpenAndCountsTheNewAttempt() {
+        EventEntity running = scheduledEvent(START);
+        running.setStatus(EventStatus.IN_PROGRESS);
+        when(events.findById(running.getId())).thenReturn(Optional.of(running));
+        EventStartFailureEntity row = openFailure(running, ExternalModule.BEI, 2);
+        doThrow(down("MS05")).when(brigade).pushState(any());
+
+        assertEquals(0, service.retryPendingStartCalls());
+
+        assertEquals(3, row.getAttempts());
+        assertTrue(row.isOpen());
+    }
+
+    @Test
+    void retryRetriesTheStartAlertForAle() {
+        EventEntity running = scheduledEvent(START);
+        running.setStatus(EventStatus.IN_PROGRESS);
+        when(events.findById(running.getId())).thenReturn(Optional.of(running));
+        openFailure(running, ExternalModule.ALE, 1);
+        withScopeRolesAndGeneralAlert(running, "alert-7");
+
+        assertEquals(1, service.retryPendingStartCalls());
+
+        verify(alerts).activate("alert-7");
+        verify(checkIn, never()).pushState(any());
+    }
+
+    @Test
+    void retryClosesTheCallWithoutCallingWhenTheEventIsNotInProgressAnymore() {
+        EventEntity finished = scheduledEvent(START);
+        finished.setStatus(EventStatus.FINISHED);
+        when(events.findById(finished.getId())).thenReturn(Optional.of(finished));
+        EventStartFailureEntity row = openFailure(finished, ExternalModule.CHI, 4);
+
+        assertEquals(1, service.retryPendingStartCalls());
+
+        assertEquals(NOW, row.getResolvedAt());
+        verify(checkIn, never()).pushState(any());
     }
 }

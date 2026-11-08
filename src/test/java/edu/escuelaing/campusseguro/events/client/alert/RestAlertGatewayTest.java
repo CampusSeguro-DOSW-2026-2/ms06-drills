@@ -27,9 +27,10 @@ class RestAlertGatewayTest extends WireMockTestBase {
     private static final String ALERTS = "/api/v1/alertas";
     private static final String RESCHEDULE = "/api/v1/alertas/{id}/programar";
     private static final String DRAFT = "/api/v1/alertas/{id}/borrador";
+    private static final String ACTIVATE = "/api/v1/alertas/{id}/activar";
 
     private RestAlertGateway gateway() {
-        return new RestAlertGateway(factory, baseUrl(), ALERTS, RESCHEDULE, DRAFT);
+        return new RestAlertGateway(factory, baseUrl(), ALERTS, RESCHEDULE, DRAFT, ACTIVATE);
     }
 
     private AlertCommand command(boolean drill) {
@@ -112,6 +113,24 @@ class RestAlertGatewayTest extends WireMockTestBase {
         gateway().backToDraft("alert-1");
 
         server.verify(patchRequestedFor(urlEqualTo("/api/v1/alertas/alert-1/borrador")));
+    }
+
+    @Test
+    void activatesTheAlert() {
+        server.stubFor(patch(urlEqualTo("/api/v1/alertas/alert-1/activar"))
+                .willReturn(aResponse().withStatus(200)));
+
+        gateway().activate("alert-1");
+
+        server.verify(patchRequestedFor(urlEqualTo("/api/v1/alertas/alert-1/activar")));
+    }
+
+    @Test
+    void activateFailureMeansUnavailable() {
+        server.stubFor(patch(urlEqualTo("/api/v1/alertas/alert-1/activar"))
+                .willReturn(aResponse().withStatus(503)));
+
+        assertThrows(ExternalServiceUnavailableException.class, () -> gateway().activate("alert-1"));
     }
 
     @Test

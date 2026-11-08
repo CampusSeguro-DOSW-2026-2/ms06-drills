@@ -43,6 +43,10 @@ public enum ErrorCode {
             HttpStatus.CONFLICT,
             "The event cannot be edited in its current status"),
 
+    EVENT_NOT_ACTIVE(
+            HttpStatus.CONFLICT,
+            "The event is not in progress"),
+
     EXTERNAL_SERVICE_UNAVAILABLE(
             HttpStatus.SERVICE_UNAVAILABLE,
             "An external service is temporarily unavailable. Please try again later"),

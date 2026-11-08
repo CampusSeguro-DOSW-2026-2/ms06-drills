@@ -1,9 +1,11 @@
 package edu.escuelaing.campusseguro.events.controller;
 
 import edu.escuelaing.campusseguro.events.dto.request.CreateEventRequest;
+import edu.escuelaing.campusseguro.events.dto.response.EventPanelResponse;
 import edu.escuelaing.campusseguro.events.dto.response.EventResponse;
 import edu.escuelaing.campusseguro.events.security.AccessActor;
 import edu.escuelaing.campusseguro.events.service.EventCreationService;
+import edu.escuelaing.campusseguro.events.service.EventPanelService;
 import edu.escuelaing.campusseguro.events.service.EventUpdateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -12,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import java.util.UUID;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -28,10 +31,12 @@ public class EventController {
 
     private final EventCreationService creation;
     private final EventUpdateService update;
+    private final EventPanelService panel;
 
-    public EventController(EventCreationService creation, EventUpdateService update) {
+    public EventController(EventCreationService creation, EventUpdateService update, EventPanelService panel) {
         this.creation = creation;
         this.update = update;
+        this.panel = panel;
     }
 
     /**
@@ -59,5 +64,17 @@ public class EventController {
             @Valid @RequestBody CreateEventRequest request,
             Authentication authentication) {
         return update.update(id, request, AccessActor.from(authentication));
+    }
+
+    /**
+     * Panel of an event that is In progress: name, route maps and the state of the check-in and
+     * incident buttons. Any signed-in user can open it; the start problems are only listed for
+     * the coordinator or organizer who manages the event.
+     */
+    @GetMapping("/{id}/panel")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Panel of an event in progress")
+    public EventPanelResponse panel(@PathVariable UUID id, Authentication authentication) {
+        return panel.panel(id, AccessActor.from(authentication));
     }
 }

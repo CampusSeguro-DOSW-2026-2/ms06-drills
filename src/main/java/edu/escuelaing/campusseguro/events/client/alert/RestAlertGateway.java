@@ -21,6 +21,8 @@ import org.springframework.web.client.RestClient;
  * ({@code POST /api/v1/alertas}, {@code PATCH /api/v1/alertas/{id}/programar}) and proposes two
  * changes the MS03 team has to accept: a {@code scopes} list (an event can mix buildings and
  * zones) and {@code PATCH /api/v1/alertas/{id}/borrador} to take an alert back to draft.
+ * To send the start alert when the event begins it uses {@code PATCH /api/v1/alertas/{id}/activar};
+ * MS03 should accept it also for an alert that is already active.
  */
 @Component
 @Profile("!local & !test")
@@ -32,17 +34,20 @@ public class RestAlertGateway implements AlertGateway {
     private final String alertsPath;
     private final String reschedulePath;
     private final String draftPath;
+    private final String activatePath;
 
     public RestAlertGateway(
             RestClientFactory factory,
             @Value("${app.clients.ms03-url:http://localhost:8080}") String baseUrl,
             @Value("${app.clients.ms03.alerts-path:/api/v1/alertas}") String alertsPath,
             @Value("${app.clients.ms03.reschedule-path:/api/v1/alertas/{id}/programar}") String reschedulePath,
-            @Value("${app.clients.ms03.draft-path:/api/v1/alertas/{id}/borrador}") String draftPath) {
+            @Value("${app.clients.ms03.draft-path:/api/v1/alertas/{id}/borrador}") String draftPath,
+            @Value("${app.clients.ms03.activate-path:/api/v1/alertas/{id}/activar}") String activatePath) {
         this.client = factory.create(baseUrl);
         this.alertsPath = alertsPath;
         this.reschedulePath = reschedulePath;
         this.draftPath = draftPath;
+        this.activatePath = activatePath;
     }
 
     @Override
@@ -72,6 +77,14 @@ public class RestAlertGateway implements AlertGateway {
     public void backToDraft(String alertId) {
         ExternalCalls.run(SERVICE, () -> client.patch()
                 .uri(draftPath, alertId)
+                .retrieve()
+                .toBodilessEntity());
+    }
+
+    @Override
+    public void activate(String alertId) {
+        ExternalCalls.run(SERVICE, () -> client.patch()
+                .uri(activatePath, alertId)
                 .retrieve()
                 .toBodilessEntity());
     }

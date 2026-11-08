@@ -1,4 +1,12 @@
 -- Schema of MS06 - Events.
+--
+-- Flyway is not used: Spring runs this file on every startup (spring.sql.init.mode=always)
+-- BEFORE Hibernate validates the entities (ddl-auto=validate). That is why every
+-- statement is idempotent (IF NOT EXISTS / ON CONFLICT) and can be repeated safely.
+-- This file always shows the schema as if it had been created from the start.
+-- CREATE TABLE IF NOT EXISTS does not modify tables that already exist: changes to an
+-- existing database (drops, new columns) are applied by hand with psql, and then this
+-- file is edited to match.
 
 -- Event type catalog. The code SIMULACRO makes an event a drill.
 CREATE TABLE IF NOT EXISTS event_types (
@@ -81,6 +89,21 @@ CREATE TABLE IF NOT EXISTS event_alerts (
     updated_at  timestamptz  NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_event_alerts_event ON event_alerts (event_id, purpose);
+
+-- Calls to CHI, BEI or ALE that failed when an event started. The event starts anyway;
+-- the scheduler repeats the call until it works (resolved_at is then filled).
+CREATE TABLE IF NOT EXISTS event_start_failures (
+    id           uuid          PRIMARY KEY,
+    event_id     uuid          NOT NULL REFERENCES events (id) ON DELETE CASCADE,
+    module       varchar(10)   NOT NULL,
+    last_error   varchar(500),
+    attempts     integer       NOT NULL,
+    resolved_at  timestamptz,
+    created_at   timestamptz   NOT NULL,
+    updated_at   timestamptz   NOT NULL,
+    UNIQUE (event_id, module)
+);
+CREATE INDEX IF NOT EXISTS idx_event_start_failures_open ON event_start_failures (event_id) WHERE resolved_at IS NULL;
 
 -- Immutable history of status changes.
 CREATE TABLE IF NOT EXISTS event_state_history (

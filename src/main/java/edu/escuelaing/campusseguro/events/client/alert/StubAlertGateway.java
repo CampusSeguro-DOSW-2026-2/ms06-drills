@@ -18,6 +18,7 @@ public class StubAlertGateway implements AlertGateway {
     private final List<AlertCommand> created = new CopyOnWriteArrayList<>();
     private final List<String> rescheduled = new CopyOnWriteArrayList<>();
     private final List<String> backToDraft = new CopyOnWriteArrayList<>();
+    private final List<String> activated = new CopyOnWriteArrayList<>();
 
     @Override
     public String createAlert(AlertCommand command) {
@@ -35,6 +36,11 @@ public class StubAlertGateway implements AlertGateway {
         backToDraft.add(alertId);
     }
 
+    @Override
+    public void activate(String alertId) {
+        activated.add(alertId);
+    }
+
     /** Alerts created so far, oldest first. */
     public List<AlertCommand> created() {
         return List.copyOf(created);
@@ -48,5 +54,10 @@ public class StubAlertGateway implements AlertGateway {
     /** Ids of the alerts taken back to draft so far. */
     public List<String> backToDraft() {
         return List.copyOf(backToDraft);
+    }
+
+    /** Ids of the alerts activated so far. */
+    public List<String> activated() {
+        return List.copyOf(activated);
     }
 }

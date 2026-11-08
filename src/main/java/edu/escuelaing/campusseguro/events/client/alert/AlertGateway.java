@@ -30,4 +30,12 @@ public interface AlertGateway {
      * @throws ExternalServiceUnavailableException if ALE does not answer
      */
     void backToDraft(String alertId);
+
+    /**
+     * Sends a scheduled alert now (the event just started). It is idempotent: activating an
+     * alert that is already active is not an error.
+     *
+     * @throws ExternalServiceUnavailableException if ALE does not answer
+     */
+    void activate(String alertId);
 }
