@@ -25,7 +25,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /**
- * Class that translates an exception in a {@link ErrorResponse} with a {@link ErrorCode}.
+ * Turns any exception into an {@link ErrorResponse} with an {@link ErrorCode}.
+ * Domain exceptions are added here together with the story that uses them.
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
@@ -35,10 +36,25 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private final Clock clock;
 
+    /** @param clock application clock, for the timestamp of each error */
     public GlobalExceptionHandler(Clock clock) {
         this.clock = clock;
     }
 
+    /** A business rule was broken: answers with the status and code of the exception. */
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<Object> handleBusiness(
+            BusinessException ex,
+            HttpServletRequest request) {
+
+        return respond(
+                ex.code(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                List.of());
+    }
+
+    /** Two users changed the same record at the same time (optimistic locking): 409. */
     @ExceptionHandler(OptimisticLockingFailureException.class)
     public ResponseEntity<Object> handleOptimisticLocking(
             OptimisticLockingFailureException ex,
@@ -51,6 +67,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 List.of());
     }
 
+    /** A database constraint was violated (unique, foreign key, etc.): 409. */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Object> handleDataIntegrity(
             DataIntegrityViolationException ex,
@@ -65,6 +82,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 List.of());
     }
 
+    /** A parameter or bean validation outside the request body failed: 400 with field details. */
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<Object> handleConstraintViolation(
             ConstraintViolationException ex,
@@ -84,6 +102,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 details);
     }
 
+    /** The user has no permission for the operation (e.g. a {@code @PreAuthorize} failed): 403. */
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Object> handleAccessDenied(
             AccessDeniedException ex,
@@ -96,6 +115,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 List.of());
     }
 
+    /** Authentication is missing or invalid: 401. */
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<Object> handleAuthentication(
             AuthenticationException ex,
@@ -108,6 +128,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 List.of());
     }
 
+    /** Any unexpected error: 500 without exposing internal details (it is logged). */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Object> handleUnexpected(
             Exception ex,
@@ -122,6 +143,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 List.of());
     }
 
+    /** The request body failed {@code @Valid}: 400 with one detail per field. */
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(
             MethodArgumentNotValidException ex,
@@ -150,6 +172,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 details);
     }
 
+    /** The body is not valid JSON or has wrong types: 400. */
     @Override
     protected ResponseEntity<Object> handleHttpMessageNotReadable(
             HttpMessageNotReadableException ex,
@@ -164,6 +187,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 List.of());
     }
 
+    /** A path or query parameter has the wrong type (e.g. text instead of a number): 400. */
     @Override
     protected ResponseEntity<Object> handleTypeMismatch(
             TypeMismatchException ex,
@@ -186,6 +210,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 details);
     }
 
+    /** Common point for Spring MVC HTTP errors (404, 405, 415, ...): returns them in the standard format. */
     @Override
     protected ResponseEntity<Object> handleExceptionInternal(
             Exception ex,
@@ -209,6 +234,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 .body(response);
     }
 
+    /** Maps an HTTP status to its {@link ErrorCode}. */
     private ErrorCode codeFor(HttpStatusCode status) {
         return switch (status.value()) {
             case 400 -> ErrorCode.VALIDATION_ERROR;

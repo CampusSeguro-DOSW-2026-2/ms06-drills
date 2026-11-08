@@ -11,10 +11,13 @@ import org.springframework.stereotype.Component;
 /**
  * Allowed status changes of an event.
  *
- * DRAFT <=> SCHEDULED => IN_PROGRESS => FINISHED
+ * <pre>
+ * DRAFT &lt;-&gt; SCHEDULED -&gt; IN_PROGRESS -&gt; FINISHED
+ * </pre>
  *
  * A scheduled event can go back to draft (for example when its start date is removed).
- * FINISHED is final.
+ * FINISHED is final. This class only knows the graph; the conditions to enter a status
+ * (complete data, services available, ...) are checked by the services that use it.
  */
 @Component
 public class EventStateMachine {
