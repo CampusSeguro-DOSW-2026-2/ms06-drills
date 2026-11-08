@@ -11,7 +11,11 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Data to create an event
+ * Data to create an event (RF-EVE-01). It is also the body to edit one (RF-EVE-02), where it replaces
+ * every editable field.
+ *
+ * <p>The event is saved as Scheduled only if it has a future start date, at least one scope item
+ * and at least one invited role. Otherwise it is saved as Draft.
  *
  * @param name             event name
  * @param description      goal and context (optional)

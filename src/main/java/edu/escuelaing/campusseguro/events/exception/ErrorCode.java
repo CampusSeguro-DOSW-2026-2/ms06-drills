@@ -3,10 +3,9 @@ package edu.escuelaing.campusseguro.events.exception;
 import org.springframework.http.HttpStatus;
 
 /**
- * Catálogo de códigos de error de la API. Cada código fija su estado HTTP y
- * un mensaje por defecto. Los códigos propios del dominio (transiciones
- * inválidas, evento no editable, etc.) se añaden junto con la historia que
- * los necesita.
+ * Catalog of API error codes. Each code sets its HTTP status and a default
+ * message. Domain codes (invalid transitions, event not editable, etc.) are
+ * added together with the story that needs them.
  */
 public enum ErrorCode {
 
@@ -37,10 +36,12 @@ public enum ErrorCode {
     CONCURRENT_MODIFICATION(
             HttpStatus.CONFLICT,
             "The resource was modified by another user"),
-
     INVALID_STATE_TRANSITION(
             HttpStatus.CONFLICT,
             "The requested status change is not allowed"),
+    EVENT_NOT_EDITABLE(
+            HttpStatus.CONFLICT,
+            "The event cannot be edited in its current status"),
 
     EXTERNAL_SERVICE_UNAVAILABLE(
             HttpStatus.SERVICE_UNAVAILABLE,

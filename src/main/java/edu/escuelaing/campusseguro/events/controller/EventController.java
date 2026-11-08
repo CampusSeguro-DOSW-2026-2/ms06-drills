@@ -4,13 +4,17 @@ import edu.escuelaing.campusseguro.events.dto.CreateEventRequest;
 import edu.escuelaing.campusseguro.events.dto.EventResponse;
 import edu.escuelaing.campusseguro.events.security.AccessActor;
 import edu.escuelaing.campusseguro.events.service.EventCreationService;
+import edu.escuelaing.campusseguro.events.service.EventUpdateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import java.util.UUID;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -23,9 +27,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class EventController {
 
     private final EventCreationService creation;
+    private final EventUpdateService update;
 
-    public EventController(EventCreationService creation) {
+    public EventController(EventCreationService creation, EventUpdateService update) {
         this.creation = creation;
+        this.update = update;
     }
 
     /**
@@ -38,5 +44,20 @@ public class EventController {
     @Operation(summary = "Create an event or drill")
     public EventResponse create(@Valid @RequestBody CreateEventRequest request, Authentication authentication) {
         return creation.create(request, AccessActor.from(authentication));
+    }
+
+    /**
+     * Edits an event. The body replaces every editable field (same body as the creation).
+     * Only the coordinator (real events) and the organizer (drills) can do it, and only while
+     * the event is Draft, Scheduled or In progress.
+     */
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('COORDINADOR','ORGANIZADOR')")
+    @Operation(summary = "Edit an event or drill")
+    public EventResponse update(
+            @PathVariable UUID id,
+            @Valid @RequestBody CreateEventRequest request,
+            Authentication authentication) {
+        return update.update(id, request, AccessActor.from(authentication));
     }
 }
