@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import edu.escuelaing.campusseguro.events.client.alert.AlertCommand;
 import edu.escuelaing.campusseguro.events.client.alert.StubAlertGateway;
+import edu.escuelaing.campusseguro.events.client.brigade.BrigadierInfo;
 import edu.escuelaing.campusseguro.events.client.brigade.StubBrigadeGateway;
 import edu.escuelaing.campusseguro.events.client.campus.ScopeRoute;
 import edu.escuelaing.campusseguro.events.client.campus.StubCampusGateway;
@@ -38,11 +39,13 @@ class StubGatewaysTest {
         String id = stub.createAlert(command);
         stub.reschedule(id, Instant.parse("2026-12-03T10:00:00Z"));
         stub.backToDraft(id);
+        stub.activate(id);
 
         assertThat(id).startsWith("stub-alert-");
         assertThat(stub.created()).containsExactly(command);
         assertThat(stub.rescheduled()).containsExactly(id + "@2026-12-03T10:00:00Z");
         assertThat(stub.backToDraft()).containsExactly(id);
+        assertThat(stub.activated()).containsExactly(id);
     }
 
     @Test
@@ -76,6 +79,17 @@ class StubGatewaysTest {
         assertThat(stub.lastState(eventId)).contains(payload());
         assertThat(stub.brigadiers(eventId).brigadiers()).isEmpty();
         assertThat(stub.indicators(eventId).totalIncidents()).isZero();
+    }
+
+    @Test
+    void brigadeStubAnswersTheBrigadiersItWasGiven() {
+        StubBrigadeGateway stub = new StubBrigadeGateway(clock);
+        BrigadierInfo ana = new BrigadierInfo("u-1", "Ana", "z1", true);
+
+        stub.givenBrigadiers(eventId, List.of(ana));
+
+        assertThat(stub.brigadiers(eventId).brigadiers()).containsExactly(ana);
+        assertThat(stub.brigadiers(UUID.randomUUID()).brigadiers()).isEmpty();
     }
 
     @Test
