@@ -2,6 +2,7 @@ package edu.escuelaing.campusseguro.events.mapper;
 
 import edu.escuelaing.campusseguro.events.client.ScopeRef;
 import edu.escuelaing.campusseguro.events.dto.response.EventResponse;
+import edu.escuelaing.campusseguro.events.dto.response.EventSummaryResponse;
 import edu.escuelaing.campusseguro.events.dto.response.EventTypeResponse;
 import edu.escuelaing.campusseguro.events.dto.response.EventWarning;
 import edu.escuelaing.campusseguro.events.entity.EventAlertEntity;
@@ -60,5 +61,34 @@ public class EventMapper {
                 event.getCreatedBy(),
                 event.getCreatedAt(),
                 warnings);
+    }
+
+    /**
+     * Builds the list item of an event.
+     *
+     * @param event the event
+     * @param scope its scope
+     * @param roles its invited roles
+     */
+    public EventSummaryResponse toSummary(EventEntity event, List<ScopeRef> scope, Set<Role> roles) {
+        List<String> types = event.getTypes().stream()
+                .map(EventTypeEntity::getName)
+                .sorted()
+                .toList();
+        List<EventResponse.ScopeItem> scopeItems = scope.stream()
+                .map(ref -> new EventResponse.ScopeItem(ref.type(), ref.id()))
+                .toList();
+        return new EventSummaryResponse(
+                event.getId(),
+                event.getName(),
+                event.getStatus(),
+                event.isSimulacro(),
+                event.getScheduledStart(),
+                event.getStartedAt(),
+                event.getEndedAt(),
+                types,
+                scopeItems,
+                new TreeSet<>(roles),
+                event.getCreatedBy());
     }
 }

@@ -8,13 +8,16 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /**
- * Class that access to events. The status queries serve the start scheduler and rule
+ * Access to events. The status queries serve the start scheduler and the BEI sync.
+ * Several events can be In progress at the same time.
  */
 public interface EventRepository extends JpaRepository<EventEntity, UUID> {
 
@@ -28,6 +31,22 @@ public interface EventRepository extends JpaRepository<EventEntity, UUID> {
 
     /** Events in the given status whose scheduled start time has arrived (start scheduler). */
     List<EventEntity> findByStatusAndScheduledStartLessThanEqual(EventStatus status, Instant moment);
+
+    /**
+     * Searches events by name and status, one page at a time.
+     *
+     * @param pattern  lower-case LIKE pattern, already escaped with {@code !} (for example {@code %fire!_drill%})
+     * @param statuses statuses to include (never empty)
+     */
+    @Query("select e from EventEntity e where e.status in :statuses "
+            + "and lower(e.name) like :pattern escape '!'")
+    Page<EventEntity> search(
+            @Param("pattern") String pattern,
+            @Param("statuses") Collection<EventStatus> statuses,
+            Pageable pageable);
+
+    /** Events in the given status, most recently started first (events in progress). */
+    List<EventEntity> findByStatusOrderByStartedAtDesc(EventStatus status);
 
     /** Events in any of the given statuses (BEI sync). */
     List<EventEntity> findByStatusIn(Collection<EventStatus> statuses);

@@ -1,6 +1,7 @@
 package edu.escuelaing.campusseguro.events.service;
 
 import edu.escuelaing.campusseguro.events.dto.response.EvaluationResponse;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -17,6 +18,13 @@ public interface EventEvaluationService {
      * It never throws because CHI or BEI are down.
      */
     EvaluationResponse evaluate(UUID eventId);
+
+    /**
+     * Saved evaluation of an event, without calling CHI or BEI.
+     *
+     * @return the evaluation, or empty if the event has none
+     */
+    Optional<EvaluationResponse> find(UUID eventId);
 
     /**
      * Asks CHI or BEI again for the numbers that are still missing in the saved evaluations.

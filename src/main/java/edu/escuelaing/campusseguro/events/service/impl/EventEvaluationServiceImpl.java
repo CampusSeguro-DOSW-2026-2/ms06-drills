@@ -14,6 +14,7 @@ import java.math.RoundingMode;
 import java.time.Clock;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,6 +57,11 @@ public class EventEvaluationServiceImpl implements EventEvaluationService {
         row.setEvaluatedAt(clock.instant());
         row.setDetails(write(fill(row, EvaluationDetails.empty(), eventId)));
         return toResponse(evaluations.save(row));
+    }
+
+    @Override
+    public Optional<EvaluationResponse> find(UUID eventId) {
+        return evaluations.findByEventId(eventId).map(this::toResponse);
     }
 
     @Override
