@@ -12,7 +12,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  */
 @SpringBootTest
 @ActiveProfiles("local")
-abstract class PostgresIntegrationTest {
+public class PostgresIntegrationTest {
 
     private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
