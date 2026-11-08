@@ -1,6 +1,8 @@
 package edu.escuelaing.campusseguro.events.service.impl;
 
 import edu.escuelaing.campusseguro.events.client.EventStatePayload;
+import edu.escuelaing.campusseguro.events.entity.enums.AuditRecordType;
+import edu.escuelaing.campusseguro.events.service.AuditService;
 import edu.escuelaing.campusseguro.events.client.alert.AlertCommand;
 import edu.escuelaing.campusseguro.events.client.alert.AlertGateway;
 import edu.escuelaing.campusseguro.events.client.brigade.BrigadeGateway;
@@ -78,6 +80,7 @@ class EventUpdateServiceTest {
     private final EventAlertRepository alertLinks = mock(EventAlertRepository.class);
     private final EventLifecycleService lifecycle = mock(EventLifecycleService.class);
     private final EventStateService stateService = mock(EventStateService.class);
+    private final AuditService audit = mock(AuditService.class);
     private final CheckInGateway checkIn = mock(CheckInGateway.class);
     private final BrigadeGateway brigade = mock(BrigadeGateway.class);
     private final AlertGateway alerts = mock(AlertGateway.class);
@@ -85,7 +88,7 @@ class EventUpdateServiceTest {
     private final IdentityGateway identity = mock(IdentityGateway.class);
     private final EventUpdateServiceImpl service = new EventUpdateServiceImpl(
             events, eventTypes, scopeItems, participants, alertLinks, campus, identity,
-            lifecycle, stateService, checkIn, brigade, alerts, new EventAccessPolicy(), new EventMapper(),
+            lifecycle, stateService, audit, checkIn, brigade, alerts, new EventAccessPolicy(), new EventMapper(),
             Clock.fixed(NOW, ZoneOffset.UTC));
 
     private final AccessActor coordinator = new AccessActor("coord-1", Set.of(Role.COORDINADOR));
@@ -221,6 +224,7 @@ class EventUpdateServiceTest {
         assertEquals(EventStatus.DRAFT, response.status());
         verify(events).save(event);
         verify(lifecycle, never()).schedule(any(), any(), any(), anyString());
+        verify(audit).record(AuditRecordType.MODIFICATION, "EVENT_UPDATED", "coord-1", event, "Event edited");
     }
 
     @Test

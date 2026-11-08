@@ -1,6 +1,8 @@
 package edu.escuelaing.campusseguro.events.service.impl;
 
 import edu.escuelaing.campusseguro.events.dto.response.EventTypeResponse;
+import edu.escuelaing.campusseguro.events.entity.enums.AuditRecordType;
+import edu.escuelaing.campusseguro.events.service.AuditService;
 import edu.escuelaing.campusseguro.events.entity.EventTypeEntity;
 import edu.escuelaing.campusseguro.events.exception.BusinessException;
 import edu.escuelaing.campusseguro.events.exception.ErrorCode;
@@ -23,7 +25,8 @@ import static org.mockito.Mockito.when;
 class EventTypeServiceTest {
 
     private final EventTypeRepository types = mock(EventTypeRepository.class);
-    private final EventTypeServiceImpl service = new EventTypeServiceImpl(types);
+    private final AuditService audit = mock(AuditService.class);
+    private final EventTypeServiceImpl service = new EventTypeServiceImpl(types, audit);
 
     private EventTypeEntity type(String code, String name) {
         EventTypeEntity entity = new EventTypeEntity();
@@ -56,6 +59,7 @@ class EventTypeServiceTest {
         assertEquals("Fuga de gas", captor.getValue().getName());
         assertEquals("coord-1", captor.getValue().getCreatedBy());
         assertTrue(created.active());
+        verify(audit).record(AuditRecordType.CREATION, "EVENT_TYPE_CREATED", "coord-1", null, "Type Fuga de gas");
     }
 
     @Test

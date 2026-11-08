@@ -1,6 +1,8 @@
 package edu.escuelaing.campusseguro.events.service.impl;
 
 import edu.escuelaing.campusseguro.events.entity.EventEntity;
+import edu.escuelaing.campusseguro.events.entity.enums.AuditRecordType;
+import edu.escuelaing.campusseguro.events.service.AuditService;
 import edu.escuelaing.campusseguro.events.entity.EventStateHistoryEntity;
 import edu.escuelaing.campusseguro.events.entity.enums.EventStatus;
 import edu.escuelaing.campusseguro.events.exception.InvalidStateTransitionException;
@@ -37,8 +39,9 @@ class EventStateServiceTest {
 
     private final EventRepository events = mock(EventRepository.class);
     private final EventStateHistoryRepository history = mock(EventStateHistoryRepository.class);
+    private final AuditService audit = mock(AuditService.class);
     private final EventStateServiceImpl service = new EventStateServiceImpl(
-            events, history, new EventStateMachine(), Clock.fixed(NOW, ZoneOffset.UTC));
+            events, history, new EventStateMachine(), audit, Clock.fixed(NOW, ZoneOffset.UTC));
 
     private final UUID id = UUID.randomUUID();
     private EventEntity event;
@@ -160,5 +163,38 @@ class EventStateServiceTest {
         when(events.existsById(id)).thenReturn(false);
 
         assertThrows(ResourceNotFoundException.class, () -> service.history(id));
+    }
+
+    @Test
+    void aStatusChangeIsAudited() {
+        service.transition(id, EventStatus.SCHEDULED, "coord-1", "all data complete");
+
+        verify(audit).record(AuditRecordType.MODIFICATION, "EVENT_STATUS_CHANGED", "coord-1", event,
+                "DRAFT -> SCHEDULED: all data complete");
+    }
+
+    @Test
+    void finishingIsAuditedAsFinalization() {
+        event.setStatus(EventStatus.IN_PROGRESS);
+
+        service.transition(id, EventStatus.FINISHED, "coord-1", "Finished by the user");
+
+        verify(audit).record(AuditRecordType.FINALIZATION, "EVENT_FINISHED", "coord-1", event,
+                "IN_PROGRESS -> FINISHED: Finished by the user");
+    }
+
+    @Test
+    void aRefusedTransitionIsNotAudited() {
+        assertThrows(InvalidStateTransitionException.class,
+                () -> service.transition(id, EventStatus.FINISHED, "coord-1", "skip"));
+
+        verify(audit, never()).record(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void theCreationIsAudited() {
+        service.recordCreation(event, "coord-1");
+
+        verify(audit).record(AuditRecordType.CREATION, "EVENT_CREATED", "coord-1", event, "Created as DRAFT");
     }
 }
