@@ -10,11 +10,13 @@ import edu.escuelaing.campusseguro.events.entity.EventEntity;
 import edu.escuelaing.campusseguro.events.entity.EventEvaluationEntity;
 import edu.escuelaing.campusseguro.events.entity.EventParticipantEntity;
 import edu.escuelaing.campusseguro.events.entity.EventScopeItemEntity;
+import edu.escuelaing.campusseguro.events.entity.EventStartFailureEntity;
 import edu.escuelaing.campusseguro.events.entity.EventStateHistoryEntity;
 import edu.escuelaing.campusseguro.events.entity.PendingAuditEntity;
 import edu.escuelaing.campusseguro.events.entity.enums.BrigadierStatus;
 import edu.escuelaing.campusseguro.events.entity.enums.EventAlertPurpose;
 import edu.escuelaing.campusseguro.events.entity.enums.EventStatus;
+import edu.escuelaing.campusseguro.events.entity.enums.ExternalModule;
 import edu.escuelaing.campusseguro.events.entity.enums.ScopeType;
 import edu.escuelaing.campusseguro.events.security.Role;
 import java.math.BigDecimal;
@@ -28,7 +30,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** Class that tests the child tables of the event: mapping, unique constraints and cascade delete. */
+/** Tests the child tables of the event: mapping, unique constraints and cascade delete. */
 class RelatedRepositoriesIT extends PostgresIntegrationTest {
 
     @Autowired
@@ -47,6 +49,8 @@ class RelatedRepositoriesIT extends PostgresIntegrationTest {
     private EventEvaluationRepository evaluations;
     @Autowired
     private PendingAuditRepository audits;
+    @Autowired
+    private EventStartFailureRepository startFailures;
     @Autowired
     private TransactionTemplate tx;
 
@@ -169,6 +173,19 @@ class RelatedRepositoriesIT extends PostgresIntegrationTest {
         assertThrows(DataIntegrityViolationException.class, () -> evaluations.saveAndFlush(evaluation()));
     }
 
+    @Test
+    void evaluationsThatMissTheChiOrBeiNumbersAreFound() {
+        assertTrue(evaluations.findByTotalCheckinsIsNullOrTotalIncidentsIsNull().isEmpty());
+
+        EventEvaluationEntity partial = evaluation();
+        partial.setTotalIncidents(null);
+        evaluations.saveAndFlush(partial);
+
+        List<EventEvaluationEntity> pending = evaluations.findByTotalCheckinsIsNullOrTotalIncidentsIsNull();
+        assertEquals(1, pending.size());
+        assertEquals(eventId, pending.get(0).getEventId());
+    }
+
     private EventEvaluationEntity evaluation() {
         EventEvaluationEntity ev = new EventEvaluationEntity();
         ev.setEventId(eventId);
@@ -209,9 +226,43 @@ class RelatedRepositoriesIT extends PostgresIntegrationTest {
         return p;
     }
 
+    private EventStartFailureEntity startFailure(ExternalModule module) {
+        EventStartFailureEntity failure = new EventStartFailureEntity();
+        failure.setEventId(eventId);
+        failure.setModule(module);
+        failure.setLastError("down");
+        failure.setAttempts(1);
+        return failure;
+    }
+
+    @Test
+    void startFailuresAreStoredAndOnlyOpenOnesAreListed() {
+        EventStartFailureEntity chi = startFailures.saveAndFlush(startFailure(ExternalModule.CHI));
+        startFailures.saveAndFlush(startFailure(ExternalModule.BEI));
+
+        chi.setResolvedAt(Instant.now());
+        startFailures.saveAndFlush(chi);
+
+        List<EventStartFailureEntity> open = startFailures.findByEventIdAndResolvedAtIsNull(eventId);
+        assertEquals(1, open.size());
+        assertEquals(ExternalModule.BEI, open.get(0).getModule());
+        assertTrue(open.get(0).isOpen());
+        assertEquals(1, startFailures.findByResolvedAtIsNull().size());
+        assertTrue(startFailures.findByEventIdAndModule(eventId, ExternalModule.CHI).isPresent());
+    }
+
+    @Test
+    void thereIsOnlyOneStartFailurePerEventAndModule() {
+        startFailures.saveAndFlush(startFailure(ExternalModule.ALE));
+
+        assertThrows(DataIntegrityViolationException.class,
+                () -> startFailures.saveAndFlush(startFailure(ExternalModule.ALE)));
+    }
+
     @Test
     void deletingTheEventRemovesItsChildren() {
         scope.saveAndFlush(scopeItem(ScopeType.ZONE, "z-9"));
+        startFailures.saveAndFlush(startFailure(ExternalModule.CHI));
         history.saveAndFlush(change(null, EventStatus.DRAFT, Instant.now()));
 
         events.deleteById(eventId);
@@ -219,5 +270,6 @@ class RelatedRepositoriesIT extends PostgresIntegrationTest {
 
         assertTrue(scope.findByEventId(eventId).isEmpty());
         assertTrue(history.findByEventIdOrderByChangedAtAsc(eventId).isEmpty());
+        assertTrue(startFailures.findByEventIdAndResolvedAtIsNull(eventId).isEmpty());
     }
 }

@@ -13,7 +13,19 @@ import edu.escuelaing.campusseguro.events.entity.enums.EventStatus;
 import edu.escuelaing.campusseguro.events.entity.enums.ScopeType;
 import edu.escuelaing.campusseguro.events.exception.ExternalServiceUnavailableException;
 import edu.escuelaing.campusseguro.events.repository.EventAlertRepository;
+import edu.escuelaing.campusseguro.events.dto.response.EvaluationResponse;
+import edu.escuelaing.campusseguro.events.dto.response.EventFinishResponse;
+import edu.escuelaing.campusseguro.events.dto.response.EventWarning;
+import edu.escuelaing.campusseguro.events.exception.InvalidStateTransitionException;
+import edu.escuelaing.campusseguro.events.exception.ResourceNotFoundException;
+import edu.escuelaing.campusseguro.events.security.AccessActor;
+import edu.escuelaing.campusseguro.events.security.EventAccessPolicy;
 import edu.escuelaing.campusseguro.events.security.Role;
+import java.math.BigDecimal;
+import java.util.Map;
+import org.springframework.security.access.AccessDeniedException;
+import edu.escuelaing.campusseguro.events.service.BrigadierSyncService;
+import edu.escuelaing.campusseguro.events.service.EventEvaluationService;
 import edu.escuelaing.campusseguro.events.service.EventStateService;
 import edu.escuelaing.campusseguro.events.service.SchedulingOutcome;
 import edu.escuelaing.campusseguro.events.entity.EventParticipantEntity;
@@ -72,9 +84,11 @@ class EventLifecycleServiceTest {
     private final EventParticipantRepository participants = mock(EventParticipantRepository.class);
     private final EventStartFailureRepository failures = mock(EventStartFailureRepository.class);
     private final TransactionTemplate tx = new TransactionTemplate(mock(PlatformTransactionManager.class));
+    private final EventEvaluationService evaluation = mock(EventEvaluationService.class);
+    private final BrigadierSyncService brigadierSync = mock(BrigadierSyncService.class);
     private final EventLifecycleServiceImpl service = new EventLifecycleServiceImpl(
             checkIn, brigade, alerts, alertLinks, stateService, events, scopeItems, participants, failures, tx,
-            Clock.fixed(NOW, ZoneOffset.UTC));
+            Clock.fixed(NOW, ZoneOffset.UTC), new EventAccessPolicy(), evaluation, brigadierSync);
 
     private final List<ScopeRef> scope = List.of(new ScopeRef(ScopeType.ZONE, "z1"));
     private final Set<Role> roles = Set.of(Role.ESTUDIANTE);
@@ -396,5 +410,172 @@ class EventLifecycleServiceTest {
 
         assertEquals(NOW, row.getResolvedAt());
         verify(checkIn, never()).pushState(any());
+    }
+
+    // ----- finishing (RF-EVE-04) -----
+
+    private final AccessActor organizer = new AccessActor("org-1", Set.of(Role.ORGANIZADOR));
+
+    private EventEntity runningEvent() {
+        EventEntity running = scheduledEvent(START);
+        running.setStatus(EventStatus.IN_PROGRESS);
+        running.setStartedAt(START);
+        when(events.findById(running.getId())).thenReturn(Optional.of(running));
+        withScopeRolesAndGeneralAlert(running, "alert-9");
+        return running;
+    }
+
+    private EvaluationResponse metrics(boolean complete, boolean noRecords) {
+        return new EvaluationResponse(UUID.randomUUID(), NOW, complete, noRecords, 3, BigDecimal.TEN, Map.of(),
+                1, 1, 1, 60L, List.of());
+    }
+
+    private List<String> codes(EventFinishResponse response) {
+        return response.warnings().stream().map(EventWarning::code).toList();
+    }
+
+    @Test
+    void finishesInOrderAndReturnsTheMetrics() {
+        EventEntity running = runningEvent();
+        EvaluationResponse metrics = metrics(true, false);
+        when(evaluation.evaluate(running.getId())).thenReturn(metrics);
+
+        EventFinishResponse response = service.finish(running.getId(), organizer);
+
+        InOrder order = inOrder(checkIn, brigade, brigadierSync, alerts, stateService, evaluation);
+        ArgumentCaptor<EventStatePayload> chi = ArgumentCaptor.forClass(EventStatePayload.class);
+        order.verify(checkIn).pushState(chi.capture());
+        order.verify(brigade).pushState(any(EventStatePayload.class));
+        order.verify(brigadierSync).syncEvent(running.getId());
+        order.verify(alerts).createAlert(any(AlertCommand.class));
+        order.verify(stateService).transition(running.getId(), EventStatus.FINISHED, "org-1", "Finished by the user");
+        order.verify(evaluation).evaluate(running.getId());
+        assertEquals(EventStatus.FINISHED, chi.getValue().status());
+        assertEquals(NOW, chi.getValue().endDate());
+        assertEquals(metrics, response.evaluation());
+        assertTrue(response.warnings().isEmpty());
+        assertEquals("Scheduled drill", response.name());
+    }
+
+    @Test
+    void theFinishAlertIsImmediateAndGoesToTheInvitedRoles() {
+        EventEntity running = runningEvent();
+        when(evaluation.evaluate(running.getId())).thenReturn(metrics(true, false));
+
+        service.finish(running.getId(), organizer);
+
+        ArgumentCaptor<AlertCommand> captor = ArgumentCaptor.forClass(AlertCommand.class);
+        verify(alerts).createAlert(captor.capture());
+        AlertCommand command = captor.getValue();
+        assertEquals(EventAlertPurpose.FINISH, command.purpose());
+        assertTrue(command.activateImmediately());
+        assertNull(command.activationAt());
+        assertEquals(Set.of(Role.ESTUDIANTE), command.recipientRoles());
+        ArgumentCaptor<EventAlertEntity> link = ArgumentCaptor.forClass(EventAlertEntity.class);
+        verify(alertLinks).save(link.capture());
+        assertEquals(EventAlertPurpose.FINISH, link.getValue().getPurpose());
+    }
+
+    @Test
+    void onlyAnEventInProgressCanBeFinished() {
+        EventEntity scheduled = scheduledEvent(START);
+
+        assertThrows(InvalidStateTransitionException.class, () -> service.finish(scheduled.getId(), organizer));
+
+        verify(checkIn, never()).pushState(any());
+        verify(stateService, never()).transition(any(), any(), anyString(), any());
+    }
+
+    @Test
+    void theRoleMustMatchTheKindOfEvent() {
+        EventEntity drill = runningEvent();
+        AccessActor coordinator = new AccessActor("coord-1", Set.of(Role.COORDINADOR));
+
+        assertThrows(AccessDeniedException.class, () -> service.finish(drill.getId(), coordinator));
+
+        verify(checkIn, never()).pushState(any());
+    }
+
+    @Test
+    void anUnknownEventIsNotFound() {
+        assertThrows(ResourceNotFoundException.class, () -> service.finish(UUID.randomUUID(), organizer));
+    }
+
+    @Test
+    void ifChiIsDownTheEventIsNotFinished() {
+        EventEntity running = runningEvent();
+        doThrow(down("MS04")).when(checkIn).pushState(any());
+
+        assertThrows(ExternalServiceUnavailableException.class, () -> service.finish(running.getId(), organizer));
+
+        verify(brigade, never()).pushState(any());
+        verify(brigadierSync, never()).syncEvent(any());
+        verify(stateService, never()).transition(any(), any(), anyString(), any());
+        verify(evaluation, never()).evaluate(any());
+    }
+
+    @Test
+    void ifBeiIsDownTheCheckInIsEnabledAgainAndTheEventIsNotFinished() {
+        EventEntity running = runningEvent();
+        doThrow(down("MS05")).when(brigade).pushState(any());
+
+        assertThrows(ExternalServiceUnavailableException.class, () -> service.finish(running.getId(), organizer));
+
+        ArgumentCaptor<EventStatePayload> chi = ArgumentCaptor.forClass(EventStatePayload.class);
+        verify(checkIn, times(2)).pushState(chi.capture());
+        assertEquals(EventStatus.FINISHED, chi.getAllValues().get(0).status());
+        assertEquals(EventStatus.IN_PROGRESS, chi.getAllValues().get(1).status());
+        verify(brigadierSync, never()).syncEvent(any());
+        verify(alerts, never()).createAlert(any());
+        verify(stateService, never()).transition(any(), any(), anyString(), any());
+    }
+
+    @Test
+    void ifTheFinalBrigadierCopyFailsTheEventIsFinishedWithAWarning() {
+        EventEntity running = runningEvent();
+        when(brigadierSync.syncEvent(running.getId())).thenThrow(down("MS05"));
+        when(evaluation.evaluate(running.getId())).thenReturn(metrics(true, false));
+
+        EventFinishResponse response = service.finish(running.getId(), organizer);
+
+        verify(stateService).transition(running.getId(), EventStatus.FINISHED, "org-1", "Finished by the user");
+        verify(alerts).createAlert(any(AlertCommand.class));
+        assertEquals(List.of("BRIGADIERS_NOT_SYNCED"), codes(response));
+    }
+
+    @Test
+    void ifAleIsDownTheEventIsFinishedAnyway() {
+        EventEntity running = runningEvent();
+        doThrow(down("MS03")).when(alerts).createAlert(any(AlertCommand.class));
+        when(evaluation.evaluate(running.getId())).thenReturn(metrics(true, false));
+
+        EventFinishResponse response = service.finish(running.getId(), organizer);
+
+        verify(stateService).transition(running.getId(), EventStatus.FINISHED, "org-1", "Finished by the user");
+        assertEquals(List.of("FINISH_ALERT_NOT_SENT"), codes(response));
+        verify(alertLinks, never()).save(any());
+    }
+
+    @Test
+    void incompleteMetricsAndMissingRecordsAreReported() {
+        EventEntity running = runningEvent();
+        when(evaluation.evaluate(running.getId())).thenReturn(metrics(false, false));
+        assertEquals(List.of("EVALUATION_INCOMPLETE"), codes(service.finish(running.getId(), organizer)));
+
+        EventEntity other = runningEvent();
+        when(evaluation.evaluate(other.getId())).thenReturn(metrics(true, true));
+        assertEquals(List.of("NO_RECORDS"), codes(service.finish(other.getId(), organizer)));
+    }
+
+    @Test
+    void theEventStaysFinishedEvenIfTheEvaluationCannotBeSaved() {
+        EventEntity running = runningEvent();
+        when(evaluation.evaluate(running.getId())).thenThrow(new IllegalStateException("database error"));
+
+        EventFinishResponse response = service.finish(running.getId(), organizer);
+
+        assertNull(response.evaluation());
+        assertEquals(List.of("EVALUATION_FAILED"), codes(response));
+        verify(stateService).transition(running.getId(), EventStatus.FINISHED, "org-1", "Finished by the user");
     }
 }

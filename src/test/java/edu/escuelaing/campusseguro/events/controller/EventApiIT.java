@@ -3,12 +3,19 @@ package edu.escuelaing.campusseguro.events.controller;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.jayway.jsonpath.JsonPath;
+import edu.escuelaing.campusseguro.events.entity.EventEntity;
+import edu.escuelaing.campusseguro.events.entity.enums.EventStatus;
+import edu.escuelaing.campusseguro.events.repository.EventRepository;
 import edu.escuelaing.campusseguro.events.repository.EventTypeRepository;
 import edu.escuelaing.campusseguro.events.repository.PostgresIntegrationTest;
+import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,6 +34,8 @@ class EventApiIT extends PostgresIntegrationTest {
     private WebApplicationContext context;
     @Autowired
     private EventTypeRepository types;
+    @Autowired
+    private EventRepository events;
 
     private MockMvc mvc;
 
@@ -138,5 +147,152 @@ class EventApiIT extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.active").value(true));
         mvc.perform(post("/api/v1/tipos-evento").with(as("COORDINADOR")).contentType(MediaType.APPLICATION_JSON).content(json))
                 .andExpect(status().isConflict());
+    }
+
+    /** Creates a draft with the coordinator token and returns its id. */
+    private String createDraft(String name) throws Exception {
+        String content = mvc.perform(post("/api/v1/eventos").with(as("COORDINADOR"))
+                        .contentType(MediaType.APPLICATION_JSON).content(body(name, typeId("SISMO"))))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return JsonPath.read(content, "$.id");
+    }
+
+    @Test
+    void theCoordinatorEditsADraft() throws Exception {
+        String id = createDraft("To edit");
+
+        mvc.perform(put("/api/v1/eventos/" + id).with(as("COORDINADOR"))
+                        .contentType(MediaType.APPLICATION_JSON).content(body("Edited", typeId("SISMO"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Edited"))
+                .andExpect(jsonPath("$.status").value("DRAFT"));
+    }
+
+    @Test
+    void aStudentCannotEditEvents() throws Exception {
+        mvc.perform(put("/api/v1/eventos/" + UUID.randomUUID()).with(as("ESTUDIANTE"))
+                        .contentType(MediaType.APPLICATION_JSON).content(body("x", typeId("SISMO"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void theOrganizerCannotEditARealEvent() throws Exception {
+        String id = createDraft("Real event");
+
+        mvc.perform(put("/api/v1/eventos/" + id).with(as("ORGANIZADOR"))
+                        .contentType(MediaType.APPLICATION_JSON).content(body("x", typeId("SISMO"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void editingAnUnknownEventAnswers404() throws Exception {
+        mvc.perform(put("/api/v1/eventos/" + UUID.randomUUID()).with(as("COORDINADOR"))
+                        .contentType(MediaType.APPLICATION_JSON).content(body("x", typeId("SISMO"))))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
+    }
+
+    @Test
+    void editingWithABlankNameIsRejected() throws Exception {
+        String id = createDraft("Blank name");
+
+        mvc.perform(put("/api/v1/eventos/" + id).with(as("COORDINADOR"))
+                        .contentType(MediaType.APPLICATION_JSON).content(body("", typeId("SISMO"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.details[0].field").value("name"));
+    }
+
+    /** Creates a draft with one zone and forces it to In progress, as the start job would do. */
+    private String createRunningEvent(String name) throws Exception {
+        String json = "{\"name\":\"" + name + "\",\"typeIds\":[\"" + typeId("SISMO") + "\"],"
+                + "\"scope\":[{\"type\":\"ZONE\",\"id\":\"z1\"}]}";
+        String content = mvc.perform(post("/api/v1/eventos").with(as("COORDINADOR"))
+                        .contentType(MediaType.APPLICATION_JSON).content(json))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String id = JsonPath.read(content, "$.id");
+        EventEntity event = events.findById(UUID.fromString(id)).orElseThrow();
+        event.setStatus(EventStatus.IN_PROGRESS);
+        event.setStartedAt(Instant.now());
+        events.saveAndFlush(event);
+        return id;
+    }
+
+    @Test
+    void thePanelOfARunningEventIsOpenToAnySignedInUser() throws Exception {
+        String id = createRunningEvent("Panel event");
+
+        mvc.perform(get("/api/v1/eventos/" + id + "/panel").with(as("ESTUDIANTE")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Panel event"))
+                .andExpect(jsonPath("$.routesAvailable").value(true))
+                .andExpect(jsonPath("$.routes[0].id").value("z1"))
+                .andExpect(jsonPath("$.checkInEnabled").value(true))
+                .andExpect(jsonPath("$.incidentRegistrationEnabled").value(true));
+    }
+
+    @Test
+    void thePanelNeedsAToken() throws Exception {
+        mvc.perform(get("/api/v1/eventos/" + UUID.randomUUID() + "/panel")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void aDraftHasNoPanel() throws Exception {
+        String id = createDraft("No panel yet");
+
+        mvc.perform(get("/api/v1/eventos/" + id + "/panel").with(as("COORDINADOR")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("EVENT_NOT_ACTIVE"));
+    }
+
+    @Test
+    void thePanelOfAnUnknownEventIsNotFound() throws Exception {
+        mvc.perform(get("/api/v1/eventos/" + UUID.randomUUID() + "/panel").with(as("COORDINADOR")))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void theCoordinatorFinishesARunningEventAndGetsTheMetrics() throws Exception {
+        String id = createRunningEvent("Finish API");
+
+        mvc.perform(patch("/api/v1/eventos/" + id + "/finalizar").with(as("COORDINADOR")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("FINISHED"))
+                .andExpect(jsonPath("$.endedAt").exists())
+                .andExpect(jsonPath("$.evaluation.complete").value(true))
+                .andExpect(jsonPath("$.evaluation.noRecords").value(true))
+                .andExpect(jsonPath("$.warnings[?(@.code=='NO_RECORDS')]").exists());
+    }
+
+    @Test
+    void anEventThatIsNotRunningCannotBeFinished() throws Exception {
+        String id = createDraft("Finish draft API");
+
+        mvc.perform(patch("/api/v1/eventos/" + id + "/finalizar").with(as("COORDINADOR")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INVALID_STATE_TRANSITION"));
+    }
+
+    @Test
+    void theOrganizerCannotFinishARealEvent() throws Exception {
+        String id = createRunningEvent("Finish forbidden API");
+
+        mvc.perform(patch("/api/v1/eventos/" + id + "/finalizar").with(as("ORGANIZADOR")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void aStudentCannotFinishEvents() throws Exception {
+        mvc.perform(patch("/api/v1/eventos/" + UUID.randomUUID() + "/finalizar").with(as("ESTUDIANTE")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void finishingNeedsATokenAndAKnownEvent() throws Exception {
+        mvc.perform(patch("/api/v1/eventos/" + UUID.randomUUID() + "/finalizar"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(patch("/api/v1/eventos/" + UUID.randomUUID() + "/finalizar").with(as("COORDINADOR")))
+                .andExpect(status().isNotFound());
     }
 }
