@@ -54,6 +54,32 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 List.of());
     }
 
+    /** A field breaks a business rule: 400 with the field as detail. */
+    @ExceptionHandler(InvalidFieldException.class)
+    public ResponseEntity<Object> handleInvalidField(
+            InvalidFieldException ex,
+            HttpServletRequest request) {
+
+        return respond(
+                ex.code(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                List.of(new ErrorResponse.Detail(ex.field(), ex.getMessage())));
+    }
+
+    /** A request uses ids that other services do not know: 400 with the field as detail. */
+    @ExceptionHandler(InvalidReferenceException.class)
+    public ResponseEntity<Object> handleInvalidReference(
+            InvalidReferenceException ex,
+            HttpServletRequest request) {
+
+        return respond(
+                ex.code(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                List.of(new ErrorResponse.Detail(ex.field(), "Unknown or inactive values: " + ex.invalidIds())));
+    }
+
     /** Two users changed the same record at the same time (optimistic locking): 409. */
     @ExceptionHandler(OptimisticLockingFailureException.class)
     public ResponseEntity<Object> handleOptimisticLocking(

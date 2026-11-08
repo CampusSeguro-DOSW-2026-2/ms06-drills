@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** Class that tests the event repository and the type catalog against a real PostgreSQL. */
+/** Tests the event repository and the type catalog against a real PostgreSQL. */
 class EventRepositoryIT extends PostgresIntegrationTest {
 
     @Autowired
@@ -48,7 +48,10 @@ class EventRepositoryIT extends PostgresIntegrationTest {
 
     @Test
     void theSevenPredefinedTypesAreSeeded() {
-        List<EventTypeEntity> active = types.findByActiveTrueOrderByNameAsc();
+        // Other tests may add types, so only the predefined ones (created by "system") are counted.
+        List<EventTypeEntity> active = types.findByActiveTrueOrderByNameAsc().stream()
+                .filter(type -> "system".equals(type.getCreatedBy()))
+                .toList();
 
         assertEquals(7, active.size());
         assertTrue(types.findByCode(EventTypeEntity.SIMULACRO_CODE).isPresent());
