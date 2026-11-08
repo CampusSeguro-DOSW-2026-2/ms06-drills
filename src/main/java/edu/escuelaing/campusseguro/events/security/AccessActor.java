@@ -34,14 +34,6 @@ public record AccessActor(String userId, Set<Role> roles) {
         return userId.length() <= MAX_ID_LENGTH ? userId : userId.substring(0, MAX_ID_LENGTH);
     }
 
-    /**
-     * Tells if the actor may create or edit an event of the given kind: the coordinator manages
-     * real events and the organizer manages drills.
-     */
-    public boolean canManageEvent(boolean simulacro) {
-        return hasRole(simulacro ? Role.ORGANIZADOR : Role.COORDINADOR);
-    }
-
     /** Tells if the actor has the given role. */
     public boolean hasRole(Role role) {
         return roles.contains(role);

@@ -7,9 +7,9 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Roles del sistema (los emite MS01 en el claim de roles del JWT).
- * COM (comunidad en el campus) agrupa a ESTUDIANTE, PROFESOR, ADMINISTRATIVO,
- * BRIGADISTA, COORDINADOR y ORGANIZADOR. ADMIN y AUDITOR no hacen parte de COM.
+ * System roles (issued by MS01 in the roles claim of the JWT).
+ * COM (campus community) groups ESTUDIANTE, PROFESOR, ADMINISTRATIVO,
+ * BRIGADISTA, COORDINADOR and ORGANIZADOR. ADMIN and AUDITOR are not part of COM.
  */
 public enum Role {
     ESTUDIANTE("EST"),
@@ -38,17 +38,19 @@ public enum Role {
         this.abbreviation = abbreviation;
     }
 
+    /** Spring Security authority name for this role, with the {@code ROLE_} prefix. */
     public String authority() {
         return AUTHORITY_PREFIX + name();
     }
 
+    /** Tells if the role is part of COM (campus community); ADMIN and AUDITOR are not. */
     public boolean isCommunity() {
         return COMMUNITY.contains(this);
     }
 
     /**
-     * Interpreta el valor de un claim: acepta el nombre completo o la
-     * abreviatura, con o sin el prefijo ROLE_ y sin importar mayúsculas.
+     * Reads a claim value: accepts the full name or the abbreviation, with or
+     * without the ROLE_ prefix, in any letter case.
      */
     public static Optional<Role> fromClaim(String value) {
         if (value == null) {

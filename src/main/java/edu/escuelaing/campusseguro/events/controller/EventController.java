@@ -1,7 +1,7 @@
 package edu.escuelaing.campusseguro.events.controller;
 
-import edu.escuelaing.campusseguro.events.dto.CreateEventRequest;
-import edu.escuelaing.campusseguro.events.dto.EventResponse;
+import edu.escuelaing.campusseguro.events.dto.request.CreateEventRequest;
+import edu.escuelaing.campusseguro.events.dto.response.EventResponse;
 import edu.escuelaing.campusseguro.events.security.AccessActor;
 import edu.escuelaing.campusseguro.events.service.EventCreationService;
 import edu.escuelaing.campusseguro.events.service.EventUpdateService;

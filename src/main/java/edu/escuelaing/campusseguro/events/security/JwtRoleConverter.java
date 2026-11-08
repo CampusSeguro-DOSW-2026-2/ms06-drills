@@ -13,17 +13,23 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.stereotype.Component;
 
 /**
- * Class that converts the JWT in an authentication which permissions came form the roles claim
+ * Converts the JWT into an authentication whose permissions come from the roles
+ * claim. Values that are not a {@link Role} are ignored.
  */
 @Component
 public class JwtRoleConverter implements Converter<Jwt, AbstractAuthenticationToken> {
 
     private final String rolesClaim;
 
+    /** @param rolesClaim name of the JWT claim with the roles (default {@code roles}) */
     public JwtRoleConverter(@Value("${app.security.roles-claim:roles}") String rolesClaim) {
         this.rolesClaim = rolesClaim;
     }
 
+    /**
+     * Converts the JWT into an authentication whose authorities are {@code ROLE_<ROLE>}.
+     * Unknown values are ignored; the user name is the {@code sub} claim.
+     */
     @Override
     public AbstractAuthenticationToken convert(Jwt jwt) {
         List<String> claimValues = jwt.getClaimAsStringList(rolesClaim);

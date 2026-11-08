@@ -1,7 +1,7 @@
 package edu.escuelaing.campusseguro.events.controller;
 
-import edu.escuelaing.campusseguro.events.dto.CreateEventTypeRequest;
-import edu.escuelaing.campusseguro.events.dto.EventTypeResponse;
+import edu.escuelaing.campusseguro.events.dto.request.CreateEventTypeRequest;
+import edu.escuelaing.campusseguro.events.dto.response.EventTypeResponse;
 import edu.escuelaing.campusseguro.events.security.AccessActor;
 import edu.escuelaing.campusseguro.events.service.EventTypeService;
 import io.swagger.v3.oas.annotations.Operation;

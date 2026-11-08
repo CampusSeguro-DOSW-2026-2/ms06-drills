@@ -6,7 +6,7 @@ import edu.escuelaing.campusseguro.events.client.alert.AlertCommand;
 import edu.escuelaing.campusseguro.events.client.alert.AlertGateway;
 import edu.escuelaing.campusseguro.events.client.brigade.BrigadeGateway;
 import edu.escuelaing.campusseguro.events.client.checkin.CheckInGateway;
-import edu.escuelaing.campusseguro.events.dto.EventWarning;
+   import edu.escuelaing.campusseguro.events.dto.response.EventWarning;
 import edu.escuelaing.campusseguro.events.entity.EventAlertEntity;
 import edu.escuelaing.campusseguro.events.entity.EventEntity;
 import edu.escuelaing.campusseguro.events.entity.enums.EventAlertPurpose;

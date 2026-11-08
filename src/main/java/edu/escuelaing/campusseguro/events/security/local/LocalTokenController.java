@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Solo en local: entrega un token de prueba por cada rol y uno sin roles.
+ * Local only: gives one test token per role and one without roles.
  */
 @Hidden
 @RestController
@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/local/tokens")
 public class LocalTokenController {
 
+    /** Key of the token of an authenticated user with no roles. */
     static final String GENERIC_USER = "USER";
 
     private final LocalTokenService localTokenService;
@@ -28,6 +29,7 @@ public class LocalTokenController {
         this.localTokenService = localTokenService;
     }
 
+    /** Returns a map role name → token, plus the key {@code USER} (no roles). */
     @GetMapping
     public Map<String, String> tokens() {
         Map<String, String> tokens = new LinkedHashMap<>();

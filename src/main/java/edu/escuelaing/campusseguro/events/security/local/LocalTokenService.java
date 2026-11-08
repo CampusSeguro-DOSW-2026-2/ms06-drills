@@ -13,6 +13,10 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Service;
 
+/**
+ * Local profile only: creates signed JWT tokens (HS256) with the requested roles,
+ * to test the API without MS01. They last 8 hours.
+ */
 @Service
 @Profile("local")
 public class LocalTokenService {
@@ -30,6 +34,13 @@ public class LocalTokenService {
         this.rolesClaim = rolesClaim;
     }
 
+    /**
+     * Creates a signed token.
+     *
+     * @param subject user identifier (goes in the {@code sub} claim)
+     * @param roles   role names for the roles claim; can be empty
+     * @return the compact token, ready for the {@code Authorization: Bearer} header
+     */
     public String generate(String subject, List<String> roles) {
         Instant now = clock.instant();
         JwtClaimsSet claims = JwtClaimsSet.builder()

@@ -6,13 +6,20 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 /**
- * Class that gets the text that is used to identify the user that made the action
+ * Gets the text that identifies the author of an action
+ * (status history, audit).
  */
 @Component
 public class ActorResolver {
 
     private static final int MAX_ACTOR_LENGTH = 64;
 
+    /**
+     * Returns the identifier of the authenticated user, cut to 64 characters
+     * (the maximum of columns like {@code created_by} and {@code changed_by}).
+     *
+     * @throws AuthenticationCredentialsNotFoundException if there is no authenticated user
+     */
     public String resolve() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
