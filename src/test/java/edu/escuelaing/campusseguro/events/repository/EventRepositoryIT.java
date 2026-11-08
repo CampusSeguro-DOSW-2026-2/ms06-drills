@@ -17,6 +17,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** Tests the event repository and the type catalog against a real PostgreSQL. */
@@ -109,6 +110,62 @@ class EventRepositoryIT extends PostgresIntegrationTest {
         List<EventEntity> running = events.findByStatusIn(List.of(EventStatus.IN_PROGRESS));
 
         assertEquals(2, running.size());
+    }
+
+    @Test
+    void searchFindsByPartOfTheNameIgnoringCaseAndFiltersByStatus() {
+        event("Fire Drill Building A", EventStatus.IN_PROGRESS, null);
+        event("fire evacuation", EventStatus.FINISHED, null);
+        event("Earthquake", EventStatus.IN_PROGRESS, null);
+        List<EventStatus> all = List.of(EventStatus.values());
+
+        List<EventEntity> byName = events.search("%fire%", all, PageRequest.of(0, 10)).getContent();
+        List<EventEntity> byNameAndStatus =
+                events.search("%fire%", List.of(EventStatus.FINISHED), PageRequest.of(0, 10)).getContent();
+
+        assertEquals(2, byName.size());
+        assertEquals(1, byNameAndStatus.size());
+        assertEquals("fire evacuation", byNameAndStatus.get(0).getName());
+    }
+
+    @Test
+    void searchTreatsTheEscapedWildcardsAsPlainText() {
+        event("100% safe", EventStatus.DRAFT, null);
+        event("1000 safe", EventStatus.DRAFT, null);
+
+        List<EventEntity> found = events.search("%100!%%", List.of(EventStatus.DRAFT), PageRequest.of(0, 10))
+                .getContent();
+
+        assertEquals(1, found.size());
+        assertEquals("100% safe", found.get(0).getName());
+    }
+
+    @Test
+    void searchIsPaginated() {
+        for (int i = 0; i < 5; i++) {
+            event("Paged " + i, EventStatus.DRAFT, null);
+        }
+
+        var page = events.search("%paged%", List.of(EventStatus.DRAFT), PageRequest.of(1, 2));
+
+        assertEquals(5, page.getTotalElements());
+        assertEquals(3, page.getTotalPages());
+        assertEquals(2, page.getContent().size());
+    }
+
+    @Test
+    void theRunningEventsComeNewestFirst() {
+        EventEntity older = event("Older", EventStatus.IN_PROGRESS, null);
+        older.setStartedAt(Instant.parse("2026-12-01T10:00:00Z"));
+        events.saveAndFlush(older);
+        EventEntity newer = event("Newer", EventStatus.IN_PROGRESS, null);
+        newer.setStartedAt(Instant.parse("2026-12-01T11:00:00Z"));
+        events.saveAndFlush(newer);
+        event("Draft", EventStatus.DRAFT, null);
+
+        List<EventEntity> running = events.findByStatusOrderByStartedAtDesc(EventStatus.IN_PROGRESS);
+
+        assertEquals(List.of("Newer", "Older"), running.stream().map(EventEntity::getName).toList());
     }
 
     @Test

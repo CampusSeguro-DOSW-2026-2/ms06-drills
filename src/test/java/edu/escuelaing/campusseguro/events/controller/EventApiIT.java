@@ -220,6 +220,80 @@ class EventApiIT extends PostgresIntegrationTest {
     }
 
     @Test
+    void theListFindsEventsByTitleAndStatus() throws Exception {
+        createDraft("Searchable Quake Event");
+        createRunningEvent("Searchable Fire Event");
+
+        mvc.perform(get("/api/v1/eventos").param("title", "searchable quake").with(as("AUDITOR")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].name").value("Searchable Quake Event"))
+                .andExpect(jsonPath("$.content[0].status").value("DRAFT"));
+
+        mvc.perform(get("/api/v1/eventos").param("title", "searchable").param("status", "IN_PROGRESS")
+                        .with(as("COORDINADOR")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].name").value("Searchable Fire Event"));
+    }
+
+    @Test
+    void aSearchWithoutResultsIsAnEmptyPage() throws Exception {
+        mvc.perform(get("/api/v1/eventos").param("title", "no-such-event-xyz").with(as("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isEmpty())
+                .andExpect(jsonPath("$.totalElements").value(0));
+    }
+
+    @Test
+    void theListRejectsAWrongPageSizeAndAnUnknownStatus() throws Exception {
+        mvc.perform(get("/api/v1/eventos").param("size", "500").with(as("COORDINADOR")))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/eventos").param("status", "NOPE").with(as("COORDINADOR")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void theListAndTheDetailAreClosedToTheCommunity() throws Exception {
+        mvc.perform(get("/api/v1/eventos").with(as("ESTUDIANTE"))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/eventos/" + UUID.randomUUID()).with(as("BRIGADISTA")))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/eventos")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void theDetailOfARunningEventHasTheMonitoring() throws Exception {
+        String id = createRunningEvent("Detail event");
+
+        mvc.perform(get("/api/v1/eventos/" + id).with(as("AUDITOR")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.event.name").value("Detail event"))
+                .andExpect(jsonPath("$.monitoring.checkIn.totalCheckins").value(0))
+                .andExpect(jsonPath("$.monitoring.incidents.totalIncidents").value(0))
+                .andExpect(jsonPath("$.monitoring.messages[0].code").value("NO_CHECKINS"))
+                .andExpect(jsonPath("$.evaluation").doesNotExist());
+    }
+
+    @Test
+    void theDetailOfAnUnknownEventIsNotFound() throws Exception {
+        mvc.perform(get("/api/v1/eventos/" + UUID.randomUUID()).with(as("COORDINADOR")))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void theActiveEventsAreOpenToAnySignedInUser() throws Exception {
+        String id = createRunningEvent("Active for coordinator");
+
+        mvc.perform(get("/api/v1/eventos/activos").with(as("COORDINADOR")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == '" + id + "')].name").value("Active for coordinator"));
+        mvc.perform(get("/api/v1/eventos/activos").with(as("ESTUDIANTE")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == '" + id + "')]").isEmpty());
+        mvc.perform(get("/api/v1/eventos/activos")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void thePanelOfARunningEventIsOpenToAnySignedInUser() throws Exception {
         String id = createRunningEvent("Panel event");
 
