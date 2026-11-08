@@ -18,6 +18,7 @@ import edu.escuelaing.campusseguro.events.entity.EventParticipantEntity;
 import edu.escuelaing.campusseguro.events.entity.EventScopeItemEntity;
 import edu.escuelaing.campusseguro.events.entity.EventTypeEntity;
 import edu.escuelaing.campusseguro.events.entity.enums.EventAlertPurpose;
+import edu.escuelaing.campusseguro.events.entity.enums.AuditRecordType;
 import edu.escuelaing.campusseguro.events.entity.enums.EventStatus;
 import edu.escuelaing.campusseguro.events.entity.enums.ScopeType;
 import edu.escuelaing.campusseguro.events.exception.BusinessException;
@@ -35,6 +36,7 @@ import edu.escuelaing.campusseguro.events.repository.EventTypeRepository;
 import edu.escuelaing.campusseguro.events.security.AccessActor;
 import edu.escuelaing.campusseguro.events.security.EventAccessPolicy;
 import edu.escuelaing.campusseguro.events.security.Role;
+import edu.escuelaing.campusseguro.events.service.AuditService;
 import edu.escuelaing.campusseguro.events.service.EventLifecycleService;
 import edu.escuelaing.campusseguro.events.service.EventStateService;
 import edu.escuelaing.campusseguro.events.service.EventUpdateService;
@@ -81,6 +83,7 @@ public class EventUpdateServiceImpl implements EventUpdateService {
     private final IdentityGateway identity;
     private final EventLifecycleService lifecycle;
     private final EventStateService stateService;
+    private final AuditService audit;
     private final CheckInGateway checkIn;
     private final BrigadeGateway brigade;
     private final AlertGateway alerts;
@@ -98,6 +101,7 @@ public class EventUpdateServiceImpl implements EventUpdateService {
             IdentityGateway identity,
             EventLifecycleService lifecycle,
             EventStateService stateService,
+            AuditService audit,
             CheckInGateway checkIn,
             BrigadeGateway brigade,
             AlertGateway alerts,
@@ -113,6 +117,7 @@ public class EventUpdateServiceImpl implements EventUpdateService {
         this.identity = identity;
         this.lifecycle = lifecycle;
         this.stateService = stateService;
+        this.audit = audit;
         this.checkIn = checkIn;
         this.brigade = brigade;
         this.alerts = alerts;
@@ -168,6 +173,9 @@ public class EventUpdateServiceImpl implements EventUpdateService {
                 hasChanges(event, request, types, oldScope, scope, oldRoles, roles),
                 warnings,
                 actor.auditId());
+        if (edit.changed()) {
+            audit.record(AuditRecordType.MODIFICATION, "EVENT_UPDATED", actor.auditId(), event, "Event edited");
+        }
 
         return switch (status) {
             case DRAFT -> editDraft(edit, request, types);

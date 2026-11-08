@@ -2,10 +2,12 @@ package edu.escuelaing.campusseguro.events.service.impl;
 
 import edu.escuelaing.campusseguro.events.entity.EventEntity;
 import edu.escuelaing.campusseguro.events.entity.EventStateHistoryEntity;
+import edu.escuelaing.campusseguro.events.entity.enums.AuditRecordType;
 import edu.escuelaing.campusseguro.events.entity.enums.EventStatus;
 import edu.escuelaing.campusseguro.events.exception.ResourceNotFoundException;
 import edu.escuelaing.campusseguro.events.repository.EventRepository;
 import edu.escuelaing.campusseguro.events.repository.EventStateHistoryRepository;
+import edu.escuelaing.campusseguro.events.service.AuditService;
 import edu.escuelaing.campusseguro.events.service.EventStateMachine;
 import edu.escuelaing.campusseguro.events.service.EventStateService;
 import java.time.Clock;
@@ -24,16 +26,19 @@ public class EventStateServiceImpl implements EventStateService {
     private final EventRepository events;
     private final EventStateHistoryRepository history;
     private final EventStateMachine stateMachine;
+    private final AuditService audit;
     private final Clock clock;
 
     public EventStateServiceImpl(
             EventRepository events,
             EventStateHistoryRepository history,
             EventStateMachine stateMachine,
+            AuditService audit,
             Clock clock) {
         this.events = events;
         this.history = history;
         this.stateMachine = stateMachine;
+        this.audit = audit;
         this.clock = clock;
     }
 
@@ -57,6 +62,11 @@ public class EventStateServiceImpl implements EventStateService {
 
         EventEntity saved = events.save(event);
         record(eventId, from, target, actor, reason, now);
+        boolean finished = target == EventStatus.FINISHED;
+        audit.record(
+                finished ? AuditRecordType.FINALIZATION : AuditRecordType.MODIFICATION,
+                finished ? "EVENT_FINISHED" : "EVENT_STATUS_CHANGED",
+                actor, saved, from + " -> " + target + (reason == null ? "" : ": " + reason));
         return saved;
     }
 
@@ -64,6 +74,7 @@ public class EventStateServiceImpl implements EventStateService {
     @Transactional
     public void recordCreation(EventEntity event, String actor) {
         record(event.getId(), null, event.getStatus(), actor, null, clock.instant());
+        audit.record(AuditRecordType.CREATION, "EVENT_CREATED", actor, event, "Created as " + event.getStatus());
     }
 
     @Override

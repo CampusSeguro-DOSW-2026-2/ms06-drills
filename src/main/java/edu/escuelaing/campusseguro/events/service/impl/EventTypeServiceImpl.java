@@ -2,10 +2,12 @@ package edu.escuelaing.campusseguro.events.service.impl;
 
 import edu.escuelaing.campusseguro.events.dto.response.EventTypeResponse;
 import edu.escuelaing.campusseguro.events.entity.EventTypeEntity;
+import edu.escuelaing.campusseguro.events.entity.enums.AuditRecordType;
 import edu.escuelaing.campusseguro.events.exception.BusinessException;
 import edu.escuelaing.campusseguro.events.exception.ErrorCode;
 import edu.escuelaing.campusseguro.events.repository.EventTypeRepository;
 import edu.escuelaing.campusseguro.events.service.EventTypeCodes;
+import edu.escuelaing.campusseguro.events.service.AuditService;
 import edu.escuelaing.campusseguro.events.service.EventTypeService;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -16,9 +18,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class EventTypeServiceImpl implements EventTypeService {
 
     private final EventTypeRepository types;
+    private final AuditService audit;
 
-    public EventTypeServiceImpl(EventTypeRepository types) {
+    public EventTypeServiceImpl(EventTypeRepository types, AuditService audit) {
         this.types = types;
+        this.audit = audit;
     }
 
     @Override
@@ -40,6 +44,8 @@ public class EventTypeServiceImpl implements EventTypeService {
         type.setName(cleanName);
         type.setActive(true);
         type.setCreatedBy(actor);
-        return EventTypeResponse.from(types.save(type));
+        EventTypeEntity saved = types.save(type);
+        audit.record(AuditRecordType.CREATION, "EVENT_TYPE_CREATED", actor, null, "Type " + saved.getName());
+        return EventTypeResponse.from(saved);
     }
 }
