@@ -6,7 +6,7 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
- * Access to the roles invited to the events.
+ * Class that access to the roles invited to the events.
  */
 public interface EventParticipantRepository extends JpaRepository<EventParticipantEntity, UUID> {
 

@@ -6,7 +6,7 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
- * Access to the status change history of the events.
+ * Class that access to the status change history of the events.
  */
 public interface EventStateHistoryRepository extends JpaRepository<EventStateHistoryEntity, UUID> {
 

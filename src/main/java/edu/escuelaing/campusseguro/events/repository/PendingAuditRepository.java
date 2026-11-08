@@ -6,7 +6,7 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
- * Access to the audit outbox sent to MS08.
+ * Class that access to the audit outbox sent to MS08.
  */
 public interface PendingAuditRepository extends JpaRepository<PendingAuditEntity, UUID> {
 

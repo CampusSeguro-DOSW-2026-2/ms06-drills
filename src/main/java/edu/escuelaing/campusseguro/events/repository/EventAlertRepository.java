@@ -7,7 +7,7 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
- * Access to the ALE alerts linked to each event.
+ * Class that access to the ALE alerts linked to each event.
  */
 public interface EventAlertRepository extends JpaRepository<EventAlertEntity, UUID> {
 
