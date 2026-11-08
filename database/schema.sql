@@ -1,10 +1,4 @@
--- Schema of MS06 - Events.
---
--- Flyway is not used: Spring runs this file on every startup (spring.sql.init.mode=always)
--- BEFORE Hibernate validates the entities (ddl-auto=validate). That is why every
--- statement is idempotent (IF NOT EXISTS / ON CONFLICT) and can be repeated safely.
--- To change an existing table, add an ALTER TABLE ... IF NOT EXISTS at the end of this
--- file; CREATE TABLE IF NOT EXISTS does not modify tables that already exist.
+-- Schema of MS06 - Events
 
 -- Event type catalog. The code SIMULACRO makes an event a drill.
 CREATE TABLE IF NOT EXISTS event_types (
