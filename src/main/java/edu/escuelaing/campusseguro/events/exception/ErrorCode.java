@@ -38,6 +38,10 @@ public enum ErrorCode {
             HttpStatus.CONFLICT,
             "The resource was modified by another user"),
 
+    INVALID_STATE_TRANSITION(
+            HttpStatus.CONFLICT,
+            "The requested status change is not allowed"),
+
     EXTERNAL_SERVICE_UNAVAILABLE(
             HttpStatus.SERVICE_UNAVAILABLE,
             "An external service is temporarily unavailable. Please try again later"),
