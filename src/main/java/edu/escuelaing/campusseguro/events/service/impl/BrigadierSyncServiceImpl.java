@@ -59,6 +59,11 @@ public class BrigadierSyncServiceImpl implements BrigadierSyncService {
         return syncAll(EventStatus.SCHEDULED);
     }
 
+    @Override
+    public boolean syncEvent(UUID eventId) {
+        return copy(eventId, EventStatus.IN_PROGRESS);
+    }
+
     /**
      * Syncs every event in the given status, one at a time. If BEI does not answer the cycle
      * stops, because BEI is down for all the events and each call would wait for the timeout.
@@ -69,7 +74,7 @@ public class BrigadierSyncServiceImpl implements BrigadierSyncService {
         int synced = 0;
         for (UUID eventId : ids) {
             try {
-                if (syncEvent(eventId, status)) {
+                if (copy(eventId, status)) {
                     synced++;
                 }
             } catch (ExternalServiceUnavailableException ex) {
@@ -87,7 +92,7 @@ public class BrigadierSyncServiceImpl implements BrigadierSyncService {
      *
      * @throws ExternalServiceUnavailableException if BEI does not answer
      */
-    private boolean syncEvent(UUID eventId, EventStatus expected) {
+    private boolean copy(UUID eventId, EventStatus expected) {
         BrigadierSnapshot snapshot = brigade.brigadiers(eventId);
         return Boolean.TRUE.equals(tx.execute(status -> apply(eventId, expected, snapshot)));
     }

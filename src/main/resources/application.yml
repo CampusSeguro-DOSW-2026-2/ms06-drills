@@ -44,6 +44,8 @@ app:
     # How often the brigadiers are copied from BEI: events in progress and scheduled events.
     bei-sync-running-ms: ${BEI_SYNC_RUNNING_MS:10000}
     bei-sync-scheduled-ms: ${BEI_SYNC_SCHEDULED_MS:30000}
+    # How often the missing CHI/BEI numbers of finished events are requested again.
+    evaluation-retry-ms: ${EVALUATION_RETRY_MS:30000}
   clients:
     connect-timeout-ms: 2000
     read-timeout-ms: 5000

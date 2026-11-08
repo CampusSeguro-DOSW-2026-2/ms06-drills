@@ -6,6 +6,8 @@ import edu.escuelaing.campusseguro.events.client.alert.AlertCommand;
 import edu.escuelaing.campusseguro.events.client.alert.AlertGateway;
 import edu.escuelaing.campusseguro.events.client.brigade.BrigadeGateway;
 import edu.escuelaing.campusseguro.events.client.checkin.CheckInGateway;
+import edu.escuelaing.campusseguro.events.dto.response.EvaluationResponse;
+import edu.escuelaing.campusseguro.events.dto.response.EventFinishResponse;
 import edu.escuelaing.campusseguro.events.dto.response.EventWarning;
 import edu.escuelaing.campusseguro.events.entity.EventAlertEntity;
 import edu.escuelaing.campusseguro.events.entity.EventEntity;
@@ -14,12 +16,18 @@ import edu.escuelaing.campusseguro.events.entity.enums.EventAlertPurpose;
 import edu.escuelaing.campusseguro.events.entity.enums.EventStatus;
 import edu.escuelaing.campusseguro.events.entity.enums.ExternalModule;
 import edu.escuelaing.campusseguro.events.exception.ExternalServiceUnavailableException;
+import edu.escuelaing.campusseguro.events.exception.InvalidStateTransitionException;
+import edu.escuelaing.campusseguro.events.exception.ResourceNotFoundException;
 import edu.escuelaing.campusseguro.events.repository.EventAlertRepository;
 import edu.escuelaing.campusseguro.events.repository.EventParticipantRepository;
 import edu.escuelaing.campusseguro.events.repository.EventRepository;
 import edu.escuelaing.campusseguro.events.repository.EventScopeItemRepository;
 import edu.escuelaing.campusseguro.events.repository.EventStartFailureRepository;
+import edu.escuelaing.campusseguro.events.security.AccessActor;
+import edu.escuelaing.campusseguro.events.security.EventAccessPolicy;
 import edu.escuelaing.campusseguro.events.security.Role;
+import edu.escuelaing.campusseguro.events.service.BrigadierSyncService;
+import edu.escuelaing.campusseguro.events.service.EventEvaluationService;
 import edu.escuelaing.campusseguro.events.service.EventLifecycleService;
 import edu.escuelaing.campusseguro.events.service.EventStateService;
 import edu.escuelaing.campusseguro.events.service.SchedulingOutcome;
@@ -47,6 +55,8 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
     private static final String BRIGADIERS_TEXT =
             "Si es posible, activa tu estado y selecciona la zona que atenderás en este evento.";
     private static final String START_TITLE = "Inicio de evento: ";
+    private static final String FINISH_TITLE = "Fin del evento: ";
+    private static final String FINISH_TEXT = "El evento ha finalizado. Gracias por tu participación.";
     private static final String START_TEXT = "El evento ha comenzado. Sigue las indicaciones de los brigadistas.";
 
     /** Author written in the history when the system starts an event. */
@@ -64,6 +74,9 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
     private final EventStartFailureRepository failures;
     private final TransactionTemplate tx;
     private final Clock clock;
+    private final EventAccessPolicy accessPolicy;
+    private final EventEvaluationService evaluation;
+    private final BrigadierSyncService brigadierSync;
 
     public EventLifecycleServiceImpl(
             CheckInGateway checkIn,
@@ -76,7 +89,10 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
             EventParticipantRepository participants,
             EventStartFailureRepository failures,
             TransactionTemplate tx,
-            Clock clock) {
+            Clock clock,
+            EventAccessPolicy accessPolicy,
+            EventEvaluationService evaluation,
+            BrigadierSyncService brigadierSync) {
         this.checkIn = checkIn;
         this.brigade = brigade;
         this.alerts = alerts;
@@ -88,6 +104,9 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
         this.failures = failures;
         this.tx = tx;
         this.clock = clock;
+        this.accessPolicy = accessPolicy;
+        this.evaluation = evaluation;
+        this.brigadierSync = brigadierSync;
     }
 
     @Override
@@ -119,6 +138,80 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
         List<EventAlertEntity> saved = alertLinks.saveAll(links);
         stateService.transition(event.getId(), EventStatus.SCHEDULED, actor, "Scheduled with all its data");
         return new SchedulingOutcome(true, List.of(), saved);
+    }
+
+    @Override
+    public EventFinishResponse finish(UUID eventId, AccessActor actor) {
+        List<EventWarning> warnings = new ArrayList<>();
+        tx.executeWithoutResult(status -> finishOne(eventId, actor, warnings));
+
+        EvaluationResponse result = null;
+        try {
+            result = evaluation.evaluate(eventId);
+        } catch (RuntimeException ex) {
+            log.error("The event {} finished but its evaluation could not be saved", eventId, ex);
+            warnings.add(new EventWarning("EVALUATION_FAILED",
+                    "The event finished, but its general metrics could not be saved."));
+        }
+        if (result != null && !result.complete()) {
+            warnings.add(new EventWarning("EVALUATION_INCOMPLETE",
+                    "Some metrics are not available yet because CHI or BEI did not answer. They will be completed automatically."));
+        }
+        if (result != null && result.noRecords()) {
+            warnings.add(new EventWarning("NO_RECORDS",
+                    "There are no check-ins, assistance requests or incidents registered yet."));
+        }
+        EventEntity finished = events.findById(eventId)
+                .orElseThrow(() -> new ResourceNotFoundException("Event not found: " + eventId));
+        return new EventFinishResponse(
+                finished.getId(), finished.getName(), finished.getStatus(),
+                finished.getStartedAt(), finished.getEndedAt(), result, warnings);
+    }
+
+    /**
+     * The part of finishing that must be atomic. The event is locked; if CHI or BEI fail the
+     * transaction is rolled back and the event stays In progress. An ALE failure only adds a warning.
+     */
+    private void finishOne(UUID eventId, AccessActor actor, List<EventWarning> warnings) {
+        EventEntity event = events.findForUpdate(eventId)
+                .orElseThrow(() -> new ResourceNotFoundException("Event not found: " + eventId));
+        accessPolicy.assertCanManage(actor, event.isSimulacro(), "finish");
+        if (event.getStatus() != EventStatus.IN_PROGRESS) {
+            throw new InvalidStateTransitionException(event.getStatus(), EventStatus.FINISHED);
+        }
+
+        List<ScopeRef> scope = scopeOf(eventId);
+        Set<Role> roles = rolesOf(eventId);
+        EventStatePayload running = payload(event, EventStatus.IN_PROGRESS, scope, roles);
+        EventStatePayload finished = new EventStatePayload(
+                event.getId(), event.getName(), event.isSimulacro(), EventStatus.FINISHED,
+                event.getScheduledStart(), clock.instant(), scope, roles);
+
+        checkIn.pushState(finished);
+        try {
+            brigade.pushState(finished);
+        } catch (ExternalServiceUnavailableException ex) {
+            bestEffort(() -> checkIn.pushState(running));
+            throw ex;
+        }
+        // BEI froze the brigadiers: take their final list before the status changes. A failure here
+        // does not stop the finish; the last copy is kept.
+        try {
+            brigadierSync.syncEvent(eventId);
+        } catch (ExternalServiceUnavailableException ex) {
+            warnings.add(new EventWarning("BRIGADIERS_NOT_SYNCED",
+                    "The event finished, but the final list of brigadiers could not be refreshed. The last copy was kept."));
+        }
+        try {
+            EventAlertEntity link = createAlert(event, new AlertCommand(
+                    event.getId(), EventAlertPurpose.FINISH, event.isSimulacro(),
+                    FINISH_TITLE + event.getName(), FINISH_TEXT, scope, roles, null, true));
+            alertLinks.save(link);
+        } catch (ExternalServiceUnavailableException ex) {
+            warnings.add(new EventWarning("FINISH_ALERT_NOT_SENT",
+                    "The event finished, but the alert to the participants could not be sent because ALE is unavailable."));
+        }
+        stateService.transition(eventId, EventStatus.FINISHED, actor.auditId(), "Finished by the user");
     }
 
     @Override

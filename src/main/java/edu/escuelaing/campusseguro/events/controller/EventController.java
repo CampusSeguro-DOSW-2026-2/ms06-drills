@@ -1,10 +1,12 @@
 package edu.escuelaing.campusseguro.events.controller;
 
 import edu.escuelaing.campusseguro.events.dto.request.CreateEventRequest;
+import edu.escuelaing.campusseguro.events.dto.response.EventFinishResponse;
 import edu.escuelaing.campusseguro.events.dto.response.EventPanelResponse;
 import edu.escuelaing.campusseguro.events.dto.response.EventResponse;
 import edu.escuelaing.campusseguro.events.security.AccessActor;
 import edu.escuelaing.campusseguro.events.service.EventCreationService;
+import edu.escuelaing.campusseguro.events.service.EventLifecycleService;
 import edu.escuelaing.campusseguro.events.service.EventPanelService;
 import edu.escuelaing.campusseguro.events.service.EventUpdateService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -15,6 +17,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -32,11 +35,17 @@ public class EventController {
     private final EventCreationService creation;
     private final EventUpdateService update;
     private final EventPanelService panel;
+    private final EventLifecycleService lifecycle;
 
-    public EventController(EventCreationService creation, EventUpdateService update, EventPanelService panel) {
+    public EventController(
+            EventCreationService creation,
+            EventUpdateService update,
+            EventPanelService panel,
+            EventLifecycleService lifecycle) {
         this.creation = creation;
         this.update = update;
         this.panel = panel;
+        this.lifecycle = lifecycle;
     }
 
     /**
@@ -76,5 +85,16 @@ public class EventController {
     @Operation(summary = "Panel of an event in progress")
     public EventPanelResponse panel(@PathVariable UUID id, Authentication authentication) {
         return panel.panel(id, AccessActor.from(authentication));
+    }
+
+    /**
+     * Finishes an event that is In progress. Only the coordinator (real events) and the organizer
+     * (drills) can do it. The answer has the general metrics of the event and any warning.
+     */
+    @PatchMapping("/{id}/finalizar")
+    @PreAuthorize("hasAnyRole('COORDINADOR','ORGANIZADOR')")
+    @Operation(summary = "Finish an event in progress")
+    public EventFinishResponse finish(@PathVariable UUID id, Authentication authentication) {
+        return lifecycle.finish(id, AccessActor.from(authentication));
     }
 }

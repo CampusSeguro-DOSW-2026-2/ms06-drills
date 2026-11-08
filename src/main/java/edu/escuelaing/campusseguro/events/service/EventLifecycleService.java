@@ -1,14 +1,20 @@
 package edu.escuelaing.campusseguro.events.service;
 
 import edu.escuelaing.campusseguro.events.client.ScopeRef;
+import edu.escuelaing.campusseguro.events.dto.response.EventFinishResponse;
 import edu.escuelaing.campusseguro.events.entity.EventEntity;
 import edu.escuelaing.campusseguro.events.exception.ExternalServiceUnavailableException;
+import edu.escuelaing.campusseguro.events.security.AccessActor;
 import edu.escuelaing.campusseguro.events.security.Role;
+import edu.escuelaing.campusseguro.events.exception.InvalidStateTransitionException;
+import edu.escuelaing.campusseguro.events.exception.ResourceNotFoundException;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
+import org.springframework.security.access.AccessDeniedException;
 
 /**
- * Moves an event through its life: Draft to Scheduled, and Scheduled to In progress.
+ * Moves an event through its life: Draft to Scheduled, Scheduled to In progress, and In progress to Finished.
  *
  * <h3>Scheduling</h3>
  *
@@ -24,6 +30,12 @@ import java.util.Set;
  * then CHI (check-in), BEI (brigadiers and incidents) and ALE (start alert) are told. If one of
  * them does not answer, the event starts anyway: the failure is saved and the call is repeated
  * until it works.
+ *
+ * <h3>Finishing (RF-EVE-04)</h3>
+ * <p>The coordinator or organizer finishes an event that is In progress. CHI and BEI must answer (check-in
+ * is disabled and the brigadiers are frozen); if one of them is down nothing changes and the error is
+ * thrown. Right after BEI freezes the brigadiers, MS06 copies their final list. If ALE is down the event finishes anyway and the answer says the alert was not sent. After
+ * the status change the automatic evaluation (CHI and BEI numbers) is saved.
  */
 public interface EventLifecycleService {
 
@@ -54,4 +66,22 @@ public interface EventLifecycleService {
      * @return how many pending calls were closed
      */
     int retryPendingStartCalls();
+
+    /**
+     * Finishes an event that is In progress.
+     *
+     * <p>Order: CHI (disable check-in), BEI (freeze brigadiers), final copy of the brigadiers, ALE (alert to
+     * the participants), status change, and then the evaluation. If the final copy fails the event is finished
+     * anyway, with a warning, and the last copy is kept. If BEI fails after CHI answered, the check-in
+     * is enabled again (best effort).
+     *
+     * @param eventId event to finish
+     * @param actor   user who finishes it
+     * @return the finished event with its general metrics and any warning
+     * @throws ResourceNotFoundException           if the event does not exist
+     * @throws AccessDeniedException               if the role does not match the kind of event
+     * @throws InvalidStateTransitionException     if the event is not In progress
+     * @throws ExternalServiceUnavailableException if CHI or BEI do not answer (the event is not finished)
+     */
+    EventFinishResponse finish(UUID eventId, AccessActor actor);
 }
