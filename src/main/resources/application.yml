@@ -7,6 +7,10 @@ spring:
     url: ${DB_URL}
     username: ${DB_USER}
     password: ${DB_PASSWORD}
+  sql:
+    init:
+      # Runs schema.sql on every startup (no Flyway); it is idempotent.
+      mode: always
   jpa:
     open-in-view: false
     hibernate:

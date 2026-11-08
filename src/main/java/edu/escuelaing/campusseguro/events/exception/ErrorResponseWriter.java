@@ -1,7 +1,5 @@
 package edu.escuelaing.campusseguro.events.exception;
 
-import edu.escuelaing.campusseguro.events.exception.ErrorCode;
-import edu.escuelaing.campusseguro.events.exception.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
