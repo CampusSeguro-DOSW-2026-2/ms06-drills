@@ -1,6 +1,6 @@
 package edu.escuelaing.campusseguro.events.service;
 
-import edu.escuelaing.campusseguro.events.dto.EventWarning;
+import edu.escuelaing.campusseguro.events.dto.response.EventWarning;
 import edu.escuelaing.campusseguro.events.entity.EventAlertEntity;
 import java.util.List;
 

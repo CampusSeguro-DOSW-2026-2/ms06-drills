@@ -10,11 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
-/**
- * Class thar test the AccessActor file
- * AccessActorTest
- */
-
+/** Tests that the actor is built from the authentication and answers its roles. */
 class AccessActorTest {
 
     @Test
@@ -40,5 +36,23 @@ class AccessActorTest {
         assertEquals(Set.of(Role.BRIGADISTA), actor.roles());
         assertTrue(actor.hasRole(Role.BRIGADISTA));
         assertFalse(actor.hasRole(Role.COORDINADOR));
+    }
+
+    @Test
+    void auditIdIsCutTo64Characters() {
+        assertEquals("user-1", new AccessActor("user-1", Set.of()).auditId());
+        assertEquals(64, new AccessActor("x".repeat(100), Set.of()).auditId().length());
+    }
+
+    @Test
+    void theCoordinatorManagesRealEventsAndTheOrganizerManagesDrills() {
+        AccessActor coordinator = new AccessActor("c", Set.of(Role.COORDINADOR));
+        AccessActor organizer = new AccessActor("o", Set.of(Role.ORGANIZADOR));
+
+        assertTrue(coordinator.canManageEvent(false));
+        assertFalse(coordinator.canManageEvent(true));
+        assertTrue(organizer.canManageEvent(true));
+        assertFalse(organizer.canManageEvent(false));
+        assertFalse(new AccessActor("a", Set.of(Role.ADMIN)).canManageEvent(false));
     }
 }
