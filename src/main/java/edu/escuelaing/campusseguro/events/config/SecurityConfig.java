@@ -5,6 +5,7 @@ import edu.escuelaing.campusseguro.events.security.RestAccessDeniedHandler;
 import edu.escuelaing.campusseguro.events.security.RestAuthenticationEntryPoint;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
@@ -29,6 +30,7 @@ import org.springframework.security.web.SecurityFilterChain;
  */
 @Configuration
 @EnableMethodSecurity
+@Profile({"local", "test"})
 public class SecurityConfig {
 
     /**
@@ -64,3 +66,4 @@ public class SecurityConfig {
         return http.build();
     }
 }
+
