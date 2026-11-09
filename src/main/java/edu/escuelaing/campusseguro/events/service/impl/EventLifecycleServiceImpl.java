@@ -2,8 +2,10 @@ package edu.escuelaing.campusseguro.events.service.impl;
 
 import edu.escuelaing.campusseguro.events.client.EventStatePayload;
 import edu.escuelaing.campusseguro.events.client.ScopeRef;
+import edu.escuelaing.campusseguro.events.client.alert.AlertActor;
 import edu.escuelaing.campusseguro.events.client.alert.AlertCommand;
 import edu.escuelaing.campusseguro.events.client.alert.AlertGateway;
+import edu.escuelaing.campusseguro.events.client.alert.AlertTypes;
 import edu.escuelaing.campusseguro.events.client.brigade.BrigadeGateway;
 import edu.escuelaing.campusseguro.events.client.checkin.CheckInGateway;
 import edu.escuelaing.campusseguro.events.dto.response.EvaluationResponse;
@@ -111,7 +113,7 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
 
     @Override
     @Transactional
-    public SchedulingOutcome schedule(EventEntity event, List<ScopeRef> scope, Set<Role> roles, String actor) {
+    public SchedulingOutcome schedule(EventEntity event, List<ScopeRef> scope, Set<Role> roles, AccessActor actor) {
         EventStatePayload scheduled = payload(event, EventStatus.SCHEDULED, scope, roles);
         EventStatePayload draft = payload(event, EventStatus.DRAFT, scope, roles);
 
@@ -126,17 +128,19 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
 
         List<EventAlertEntity> links = new ArrayList<>();
         try {
-            links.add(createAlert(event, brigadiersAlert(event, scope)));
-            links.add(createAlert(event, generalAlert(event, scope, roles)));
+            links.add(createAlert(event, brigadiersAlert(event, scope), actor));
+            links.add(createAlert(event, generalAlert(event, scope, roles), actor));
         } catch (ExternalServiceUnavailableException ex) {
-            links.forEach(link -> bestEffort(() -> alerts.backToDraft(link.getAlertId())));
+            links.forEach(link -> bestEffort(
+                    () -> alerts.archive(link.getAlertId(), AlertActor.from(actor))));
             bestEffort(() -> checkIn.pushState(draft));
             bestEffort(() -> brigade.pushState(draft));
             return stayDraft("ALE");
         }
 
         List<EventAlertEntity> saved = alertLinks.saveAll(links);
-        stateService.transition(event.getId(), EventStatus.SCHEDULED, actor, "Scheduled with all its data");
+        stateService.transition(event.getId(), EventStatus.SCHEDULED, actor.auditId(),
+                "Scheduled with all its data");
         return new SchedulingOutcome(true, List.of(), saved);
     }
 
@@ -205,7 +209,8 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
         try {
             EventAlertEntity link = createAlert(event, new AlertCommand(
                     event.getId(), EventAlertPurpose.FINISH, event.isSimulacro(),
-                    FINISH_TITLE + event.getName(), FINISH_TEXT, scope, roles, null, true));
+                    FINISH_TITLE + event.getName(), FINISH_TEXT, scope, roles, null, true,
+                    AlertTypes.from(event.getTypes())), actor);
             alertLinks.save(link);
         } catch (ExternalServiceUnavailableException ex) {
             warnings.add(new EventWarning("FINISH_ALERT_NOT_SENT",
@@ -266,8 +271,9 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
         stateService.transition(eventId, EventStatus.IN_PROGRESS, SYSTEM_ACTOR, "Started automatically");
 
         EventStatePayload payload = payload(event, EventStatus.IN_PROGRESS, scopeOf(eventId), rolesOf(eventId));
+        AccessActor automatic = automaticActor(event);
         for (ExternalModule module : ExternalModule.values()) {
-            attempt(eventId, module, payload);
+            attempt(eventId, module, payload, automatic);
         }
         return true;
     }
@@ -290,17 +296,17 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
             return true;
         }
         EventStatePayload payload = payload(event, EventStatus.IN_PROGRESS, scopeOf(event.getId()), rolesOf(event.getId()));
-        attempt(event.getId(), failure.getModule(), payload);
+        attempt(event.getId(), failure.getModule(), payload, automaticActor(event));
         return failures.findById(failureId).map(row -> !row.isOpen()).orElse(false);
     }
 
     /** Calls one module and saves the result: a failure is stored or updated, a success closes it. */
-    private void attempt(UUID eventId, ExternalModule module, EventStatePayload payload) {
+    private void attempt(UUID eventId, ExternalModule module, EventStatePayload payload, AccessActor actor) {
         try {
             switch (module) {
                 case CHI -> checkIn.pushState(payload);
                 case BEI -> brigade.pushState(payload);
-                case ALE -> activateStartAlert(eventId);
+                case ALE -> activateStartAlert(eventId, actor);
             }
             closeFailure(eventId, module);
         } catch (ExternalServiceUnavailableException ex) {
@@ -310,9 +316,9 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
     }
 
     /** Sends the alert that tells the participants the event started. */
-    private void activateStartAlert(UUID eventId) {
+    private void activateStartAlert(UUID eventId, AccessActor actor) {
         for (EventAlertEntity link : alertLinks.findByEventIdAndPurpose(eventId, EventAlertPurpose.GENERAL)) {
-            alerts.activate(link.getAlertId());
+            alerts.activate(link.getAlertId(), AlertActor.from(actor));
         }
     }
 
@@ -355,8 +361,8 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
         return text.substring(0, ERROR_MAX_LENGTH);
     }
 
-    private EventAlertEntity createAlert(EventEntity event, AlertCommand command) {
-        String alertId = alerts.createAlert(command);
+    private EventAlertEntity createAlert(EventEntity event, AlertCommand command, AccessActor actor) {
+        String alertId = alerts.createAlert(command, AlertActor.from(actor));
         EventAlertEntity link = new EventAlertEntity();
         link.setEventId(event.getId());
         link.setAlertId(alertId);
@@ -364,12 +370,23 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
         return link;
     }
 
+    /**
+     * Identity used when the event starts on its own. It is the user who created the event and
+     * the role that authorizes the operation: ORGANIZADOR for drills, COORDINADOR for real events.
+     */
+    private AccessActor automaticActor(EventEntity event) {
+        String userId = event.getCreatedBy();
+        Role role = event.isSimulacro() ? Role.ORGANIZADOR : Role.COORDINADOR;
+        return new AccessActor(userId == null ? "" : userId, Set.of(role));
+    }
+
     /** Alert that asks brigadiers to activate and choose a zone. It is sent right away. */
     private AlertCommand brigadiersAlert(EventEntity event, List<ScopeRef> scope) {
         return new AlertCommand(
                 event.getId(), EventAlertPurpose.BRIGADISTS, event.isSimulacro(),
                 BRIGADIERS_TITLE + event.getName(), BRIGADIERS_TEXT,
-                scope, Set.of(Role.BRIGADISTA), null, true);
+                scope, Set.of(Role.BRIGADISTA), null, true,
+                AlertTypes.from(event.getTypes()));
     }
 
     /** Alert that tells participants the event started. It is scheduled for the start date. */
@@ -377,7 +394,8 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
         return new AlertCommand(
                 event.getId(), EventAlertPurpose.GENERAL, event.isSimulacro(),
                 START_TITLE + event.getName(), START_TEXT,
-                scope, roles, event.getScheduledStart(), false);
+                scope, roles, event.getScheduledStart(), false,
+                AlertTypes.from(event.getTypes()));
     }
 
     private EventStatePayload payload(EventEntity event, EventStatus status, List<ScopeRef> scope, Set<Role> roles) {

@@ -15,6 +15,7 @@ import org.springframework.web.client.RestClient;
 public class RestClientFactory {
 
     private final RestClient.Builder builder;
+    private final RestClient.Builder gatewayBuilder;
 
     public RestClientFactory(
             RestClient.Builder builder,
@@ -31,6 +32,7 @@ public class RestClientFactory {
         requestFactory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
 
         this.builder = builder.clone().requestFactory(requestFactory);
+        this.gatewayBuilder = this.builder.clone();
         if (serviceToken != null && !serviceToken.isBlank()) {
             this.builder.defaultHeader("Authorization", "Bearer " + serviceToken);
         }
@@ -39,5 +41,13 @@ public class RestClientFactory {
     /** Creates a client whose paths are relative to {@code baseUrl}. */
     public RestClient create(String baseUrl) {
         return builder.clone().baseUrl(baseUrl).build();
+    }
+
+    /**
+     * Creates a client for the API Gateway. It never sends {@code Authorization}: the Gateway
+     * accepts either a JWT or a service key, never both.
+     */
+    public RestClient createGateway(String baseUrl) {
+        return gatewayBuilder.clone().baseUrl(baseUrl).build();
     }
 }

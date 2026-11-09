@@ -95,7 +95,7 @@ class EventCreationServiceTest {
             ReflectionTestUtils.setField(event, "id", UUID.randomUUID());
             return event;
         });
-        when(lifecycle.schedule(any(), any(), any(), anyString()))
+        when(lifecycle.schedule(any(), any(), any(), any()))
                 .thenReturn(new SchedulingOutcome(true, List.of(), List.of()));
     }
 
@@ -118,14 +118,14 @@ class EventCreationServiceTest {
         assertEquals("coord-1", response.createdBy());
         assertTrue(response.warnings().isEmpty());
         verify(stateService).recordCreation(any(EventEntity.class), anyString());
-        verify(lifecycle, never()).schedule(any(), any(), any(), anyString());
+        verify(lifecycle, never()).schedule(any(), any(), any(), any());
     }
 
     @Test
     void triesToScheduleWhenDateScopeAndRolesAreComplete() {
         service.create(request(Set.of(sismo.getId()), FUTURE, zone(), Set.of(Role.ESTUDIANTE)), coordinator);
 
-        verify(lifecycle).schedule(any(EventEntity.class), any(), any(), anyString());
+        verify(lifecycle).schedule(any(EventEntity.class), any(), any(), any());
         verify(campus).validateScope(ScopeType.ZONE, List.of("z1"));
         verify(identity).validateRoles(Set.of(Role.ESTUDIANTE));
     }
@@ -134,19 +134,19 @@ class EventCreationServiceTest {
     void doesNotScheduleWithoutScope() {
         service.create(request(Set.of(sismo.getId()), FUTURE, null, Set.of(Role.ESTUDIANTE)), coordinator);
 
-        verify(lifecycle, never()).schedule(any(), any(), any(), anyString());
+        verify(lifecycle, never()).schedule(any(), any(), any(), any());
     }
 
     @Test
     void doesNotScheduleWithoutParticipants() {
         service.create(request(Set.of(sismo.getId()), FUTURE, zone(), null), coordinator);
 
-        verify(lifecycle, never()).schedule(any(), any(), any(), anyString());
+        verify(lifecycle, never()).schedule(any(), any(), any(), any());
     }
 
     @Test
     void includesTheWarningsOfTheSchedulingAttempt() {
-        when(lifecycle.schedule(any(), any(), any(), anyString())).thenReturn(new SchedulingOutcome(
+        when(lifecycle.schedule(any(), any(), any(), any())).thenReturn(new SchedulingOutcome(
                 false, List.of(new edu.escuelaing.campusseguro.events.dto.response.EventWarning("SAVED_AS_DRAFT", "x")), List.of()));
 
         EventResponse response = service.create(
@@ -247,7 +247,7 @@ class EventCreationServiceTest {
         assertEquals(EventStatus.DRAFT, response.status());
         assertTrue(response.scope().isEmpty());
         assertEquals("SCOPE_PENDING", response.warnings().get(0).code());
-        verify(lifecycle, never()).schedule(any(), any(), any(), anyString());
+        verify(lifecycle, never()).schedule(any(), any(), any(), any());
     }
 
     @Test
@@ -261,12 +261,12 @@ class EventCreationServiceTest {
         assertEquals(EventStatus.DRAFT, response.status());
         assertTrue(response.participantRoles().isEmpty());
         assertEquals("PARTICIPANTS_PENDING", response.warnings().get(0).code());
-        verify(lifecycle, never()).schedule(any(), any(), any(), anyString());
+        verify(lifecycle, never()).schedule(any(), any(), any(), any());
     }
 
     @Test
     void chiDownPropagatesSoNothingIsSaved() {
-        when(lifecycle.schedule(any(), any(), any(), anyString()))
+        when(lifecycle.schedule(any(), any(), any(), any()))
                 .thenThrow(new ExternalServiceUnavailableException("MS04", new RuntimeException()));
 
         assertThrows(ExternalServiceUnavailableException.class, () -> service.create(

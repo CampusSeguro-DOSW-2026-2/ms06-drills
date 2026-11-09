@@ -17,27 +17,27 @@ public class StubAlertGateway implements AlertGateway {
 
     private final List<AlertCommand> created = new CopyOnWriteArrayList<>();
     private final List<String> rescheduled = new CopyOnWriteArrayList<>();
-    private final List<String> backToDraft = new CopyOnWriteArrayList<>();
+    private final List<String> archived = new CopyOnWriteArrayList<>();
     private final List<String> activated = new CopyOnWriteArrayList<>();
 
     @Override
-    public String createAlert(AlertCommand command) {
+    public String createAlert(AlertCommand command, AlertActor actor) {
         created.add(command);
         return "stub-alert-" + UUID.randomUUID();
     }
 
     @Override
-    public void reschedule(String alertId, Instant activationAt) {
+    public void reschedule(String alertId, Instant activationAt, AlertActor actor) {
         rescheduled.add(alertId + "@" + activationAt);
     }
 
     @Override
-    public void backToDraft(String alertId) {
-        backToDraft.add(alertId);
+    public void archive(String alertId, AlertActor actor) {
+        archived.add(alertId);
     }
 
     @Override
-    public void activate(String alertId) {
+    public void activate(String alertId, AlertActor actor) {
         activated.add(alertId);
     }
 
@@ -51,9 +51,9 @@ public class StubAlertGateway implements AlertGateway {
         return List.copyOf(rescheduled);
     }
 
-    /** Ids of the alerts taken back to draft so far. */
-    public List<String> backToDraft() {
-        return List.copyOf(backToDraft);
+    /** Ids of the alerts archived so far. */
+    public List<String> archived() {
+        return List.copyOf(archived);
     }
 
     /** Ids of the alerts activated so far. */

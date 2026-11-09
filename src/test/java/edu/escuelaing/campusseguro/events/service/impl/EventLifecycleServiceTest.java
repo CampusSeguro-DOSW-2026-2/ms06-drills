@@ -2,6 +2,7 @@ package edu.escuelaing.campusseguro.events.service.impl;
 
 import edu.escuelaing.campusseguro.events.client.EventStatePayload;
 import edu.escuelaing.campusseguro.events.client.ScopeRef;
+import edu.escuelaing.campusseguro.events.client.alert.AlertActor;
 import edu.escuelaing.campusseguro.events.client.alert.AlertCommand;
 import edu.escuelaing.campusseguro.events.client.alert.AlertGateway;
 import edu.escuelaing.campusseguro.events.client.brigade.BrigadeGateway;
@@ -57,6 +58,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
@@ -70,6 +72,10 @@ import static org.mockito.Mockito.when;
 
 /** Tests the lifecycle order and the undo steps with mocked gateways. */
 class EventLifecycleServiceTest {
+
+    private static AccessActor actor(String userId) {
+        return new AccessActor(userId, Set.of(Role.COORDINADOR));
+    }
 
     private static final Instant START = Instant.parse("2026-12-01T15:00:00Z");
     private static final Instant NOW = Instant.parse("2026-12-01T15:00:05Z");
@@ -106,13 +112,13 @@ class EventLifecycleServiceTest {
         event.setSimulacro(true);
         event.setStatus(EventStatus.DRAFT);
         event.setScheduledStart(START);
-        when(alerts.createAlert(any(AlertCommand.class))).thenReturn("alert-1", "alert-2");
+        when(alerts.createAlert(any(AlertCommand.class), any(AlertActor.class))).thenReturn("alert-1", "alert-2");
         when(alertLinks.saveAll(any())).thenAnswer(call -> List.copyOf(call.<List<EventAlertEntity>>getArgument(0)));
     }
 
     @Test
     void schedulesInOrderAndCreatesTheTwoAlerts() {
-        SchedulingOutcome outcome = service.schedule(event, scope, roles, "coord-1");
+        SchedulingOutcome outcome = service.schedule(event, scope, roles, actor("coord-1"));
 
         assertTrue(outcome.scheduled());
         assertTrue(outcome.warnings().isEmpty());
@@ -124,16 +130,16 @@ class EventLifecycleServiceTest {
         InOrder order = inOrder(checkIn, brigade, alerts, stateService);
         order.verify(checkIn).pushState(any(EventStatePayload.class));
         order.verify(brigade).pushState(any(EventStatePayload.class));
-        order.verify(alerts, times(2)).createAlert(any(AlertCommand.class));
+        order.verify(alerts, times(2)).createAlert(any(AlertCommand.class), any(AlertActor.class));
         order.verify(stateService).transition(event.getId(), EventStatus.SCHEDULED, "coord-1", "Scheduled with all its data");
     }
 
     @Test
     void brigadiersAlertIsImmediateAndGeneralAlertWaitsForTheStartDate() {
-        service.schedule(event, scope, roles, "coord-1");
+        service.schedule(event, scope, roles, actor("coord-1"));
 
         ArgumentCaptor<AlertCommand> captor = ArgumentCaptor.forClass(AlertCommand.class);
-        verify(alerts, times(2)).createAlert(captor.capture());
+        verify(alerts, times(2)).createAlert(captor.capture(), any(AlertActor.class));
         AlertCommand brigadiers = captor.getAllValues().get(0);
         AlertCommand general = captor.getAllValues().get(1);
 
@@ -152,7 +158,7 @@ class EventLifecycleServiceTest {
 
     @Test
     void sendsTheScheduledStateToChiAndBei() {
-        service.schedule(event, scope, roles, "coord-1");
+        service.schedule(event, scope, roles, actor("coord-1"));
 
         ArgumentCaptor<EventStatePayload> chi = ArgumentCaptor.forClass(EventStatePayload.class);
         verify(checkIn).pushState(chi.capture());
@@ -167,10 +173,10 @@ class EventLifecycleServiceTest {
     void chiDownStopsEverythingAndThrows() {
         doThrow(down("MS04")).when(checkIn).pushState(any(EventStatePayload.class));
 
-        assertThrows(ExternalServiceUnavailableException.class, () -> service.schedule(event, scope, roles, "coord-1"));
+        assertThrows(ExternalServiceUnavailableException.class, () -> service.schedule(event, scope, roles, actor("coord-1")));
 
         verify(brigade, never()).pushState(any(EventStatePayload.class));
-        verify(alerts, never()).createAlert(any(AlertCommand.class));
+        verify(alerts, never()).createAlert(any(AlertCommand.class), any(AlertActor.class));
         verify(stateService, never()).transition(any(), any(), anyString(), any());
     }
 
@@ -178,7 +184,7 @@ class EventLifecycleServiceTest {
     void beiDownKeepsTheEventAsDraftAndUndoesChi() {
         doThrow(down("MS05")).when(brigade).pushState(any(EventStatePayload.class));
 
-        SchedulingOutcome outcome = service.schedule(event, scope, roles, "coord-1");
+        SchedulingOutcome outcome = service.schedule(event, scope, roles, actor("coord-1"));
 
         assertFalse(outcome.scheduled());
         assertEquals("SAVED_AS_DRAFT", outcome.warnings().get(0).code());
@@ -187,19 +193,19 @@ class EventLifecycleServiceTest {
         ArgumentCaptor<EventStatePayload> chi = ArgumentCaptor.forClass(EventStatePayload.class);
         verify(checkIn, times(2)).pushState(chi.capture());
         assertEquals(EventStatus.DRAFT, chi.getAllValues().get(1).status());
-        verify(alerts, never()).createAlert(any(AlertCommand.class));
+        verify(alerts, never()).createAlert(any(AlertCommand.class), any(AlertActor.class));
         verify(stateService, never()).transition(any(), any(), anyString(), any());
     }
 
     @Test
     void aleDownOnTheSecondAlertUndoesEverything() {
-        when(alerts.createAlert(any(AlertCommand.class))).thenReturn("alert-1").thenThrow(down("MS03"));
+        when(alerts.createAlert(any(AlertCommand.class), any(AlertActor.class))).thenReturn("alert-1").thenThrow(down("MS03"));
 
-        SchedulingOutcome outcome = service.schedule(event, scope, roles, "coord-1");
+        SchedulingOutcome outcome = service.schedule(event, scope, roles, actor("coord-1"));
 
         assertFalse(outcome.scheduled());
         assertEquals("SAVED_AS_DRAFT", outcome.warnings().get(0).code());
-        verify(alerts).backToDraft("alert-1");
+        verify(alerts).archive(eq("alert-1"), any(AlertActor.class));
         ArgumentCaptor<EventStatePayload> chi = ArgumentCaptor.forClass(EventStatePayload.class);
         verify(checkIn, times(2)).pushState(chi.capture());
         assertEquals(EventStatus.DRAFT, chi.getAllValues().get(1).status());
@@ -212,12 +218,12 @@ class EventLifecycleServiceTest {
 
     @Test
     void aleDownOnTheFirstAlertHasNothingToUndoInAle() {
-        when(alerts.createAlert(any(AlertCommand.class))).thenThrow(down("MS03"));
+        when(alerts.createAlert(any(AlertCommand.class), any(AlertActor.class))).thenThrow(down("MS03"));
 
-        SchedulingOutcome outcome = service.schedule(event, scope, roles, "coord-1");
+        SchedulingOutcome outcome = service.schedule(event, scope, roles, actor("coord-1"));
 
         assertFalse(outcome.scheduled());
-        verify(alerts, never()).backToDraft(anyString());
+        verify(alerts, never()).archive(anyString(), any(AlertActor.class));
     }
 
     @Test
@@ -226,7 +232,7 @@ class EventLifecycleServiceTest {
         doThrow(down("MS04")).when(checkIn).pushState(
                 org.mockito.ArgumentMatchers.argThat(payload -> payload != null && payload.status() == EventStatus.DRAFT));
 
-        SchedulingOutcome outcome = service.schedule(event, scope, roles, "coord-1");
+        SchedulingOutcome outcome = service.schedule(event, scope, roles, actor("coord-1"));
 
         assertFalse(outcome.scheduled());
     }
@@ -277,7 +283,7 @@ class EventLifecycleServiceTest {
         assertEquals(List.of(new ScopeRef(ScopeType.ZONE, "z1")), chi.getValue().scope());
         assertEquals(Set.of(Role.ESTUDIANTE), chi.getValue().invitedRoles());
         verify(brigade).pushState(any(EventStatePayload.class));
-        verify(alerts).activate("alert-9");
+        verify(alerts).activate(eq("alert-9"), any(AlertActor.class));
         verify(failures, never()).save(any());
     }
 
@@ -315,7 +321,7 @@ class EventLifecycleServiceTest {
         withScopeRolesAndGeneralAlert(due, "alert-9");
         doThrow(down("MS04")).when(checkIn).pushState(any());
         doThrow(down("MS05")).when(brigade).pushState(any());
-        doThrow(down("MS03")).when(alerts).activate(anyString());
+        doThrow(down("MS03")).when(alerts).activate(anyString(), any(AlertActor.class));
 
         assertEquals(1, service.startDueEvents());
 
@@ -395,7 +401,7 @@ class EventLifecycleServiceTest {
 
         assertEquals(1, service.retryPendingStartCalls());
 
-        verify(alerts).activate("alert-7");
+        verify(alerts).activate(eq("alert-7"), any(AlertActor.class));
         verify(checkIn, never()).pushState(any());
     }
 
@@ -447,7 +453,7 @@ class EventLifecycleServiceTest {
         order.verify(checkIn).pushState(chi.capture());
         order.verify(brigade).pushState(any(EventStatePayload.class));
         order.verify(brigadierSync).syncEvent(running.getId());
-        order.verify(alerts).createAlert(any(AlertCommand.class));
+        order.verify(alerts).createAlert(any(AlertCommand.class), any(AlertActor.class));
         order.verify(stateService).transition(running.getId(), EventStatus.FINISHED, "org-1", "Finished by the user");
         order.verify(evaluation).evaluate(running.getId());
         assertEquals(EventStatus.FINISHED, chi.getValue().status());
@@ -465,7 +471,7 @@ class EventLifecycleServiceTest {
         service.finish(running.getId(), organizer);
 
         ArgumentCaptor<AlertCommand> captor = ArgumentCaptor.forClass(AlertCommand.class);
-        verify(alerts).createAlert(captor.capture());
+        verify(alerts).createAlert(captor.capture(), any(AlertActor.class));
         AlertCommand command = captor.getValue();
         assertEquals(EventAlertPurpose.FINISH, command.purpose());
         assertTrue(command.activateImmediately());
@@ -526,7 +532,7 @@ class EventLifecycleServiceTest {
         assertEquals(EventStatus.FINISHED, chi.getAllValues().get(0).status());
         assertEquals(EventStatus.IN_PROGRESS, chi.getAllValues().get(1).status());
         verify(brigadierSync, never()).syncEvent(any());
-        verify(alerts, never()).createAlert(any());
+        verify(alerts, never()).createAlert(any(), any(AlertActor.class));
         verify(stateService, never()).transition(any(), any(), anyString(), any());
     }
 
@@ -539,14 +545,14 @@ class EventLifecycleServiceTest {
         EventFinishResponse response = service.finish(running.getId(), organizer);
 
         verify(stateService).transition(running.getId(), EventStatus.FINISHED, "org-1", "Finished by the user");
-        verify(alerts).createAlert(any(AlertCommand.class));
+        verify(alerts).createAlert(any(AlertCommand.class), any(AlertActor.class));
         assertEquals(List.of("BRIGADIERS_NOT_SYNCED"), codes(response));
     }
 
     @Test
     void ifAleIsDownTheEventIsFinishedAnyway() {
         EventEntity running = runningEvent();
-        doThrow(down("MS03")).when(alerts).createAlert(any(AlertCommand.class));
+        doThrow(down("MS03")).when(alerts).createAlert(any(AlertCommand.class), any(AlertActor.class));
         when(evaluation.evaluate(running.getId())).thenReturn(metrics(true, false));
 
         EventFinishResponse response = service.finish(running.getId(), organizer);

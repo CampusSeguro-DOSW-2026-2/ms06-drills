@@ -2,6 +2,7 @@ package edu.escuelaing.campusseguro.events.client;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import edu.escuelaing.campusseguro.events.client.alert.AlertActor;
 import edu.escuelaing.campusseguro.events.client.alert.AlertCommand;
 import edu.escuelaing.campusseguro.events.client.alert.StubAlertGateway;
 import edu.escuelaing.campusseguro.events.client.brigade.BrigadierInfo;
@@ -12,6 +13,7 @@ import edu.escuelaing.campusseguro.events.client.checkin.StubCheckInGateway;
 import edu.escuelaing.campusseguro.events.entity.enums.EventAlertPurpose;
 import edu.escuelaing.campusseguro.events.entity.enums.EventStatus;
 import edu.escuelaing.campusseguro.events.entity.enums.ScopeType;
+import edu.escuelaing.campusseguro.events.security.Role;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -36,15 +38,16 @@ class StubGatewaysTest {
         AlertCommand command = new AlertCommand(eventId, EventAlertPurpose.FINISH, false, "t", "i",
                 List.of(), Set.of(), null, true);
 
-        String id = stub.createAlert(command);
-        stub.reschedule(id, Instant.parse("2026-12-03T10:00:00Z"));
-        stub.backToDraft(id);
-        stub.activate(id);
+        AlertActor actor = new AlertActor("11111111-1111-4111-8111-111111111111", Set.of(Role.COORDINADOR));
+        String id = stub.createAlert(command, actor);
+        stub.reschedule(id, Instant.parse("2026-12-03T10:00:00Z"), actor);
+        stub.archive(id, actor);
+        stub.activate(id, actor);
 
         assertThat(id).startsWith("stub-alert-");
         assertThat(stub.created()).containsExactly(command);
         assertThat(stub.rescheduled()).containsExactly(id + "@2026-12-03T10:00:00Z");
-        assertThat(stub.backToDraft()).containsExactly(id);
+        assertThat(stub.archived()).containsExactly(id);
         assertThat(stub.activated()).containsExactly(id);
     }
 

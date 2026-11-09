@@ -49,7 +49,7 @@ public interface EventLifecycleService {
      * @return what happened; see {@link SchedulingOutcome}
      * @throws ExternalServiceUnavailableException if CHI does not answer
      */
-    SchedulingOutcome schedule(EventEntity event, List<ScopeRef> scope, Set<Role> roles, String actor);
+    SchedulingOutcome schedule(EventEntity event, List<ScopeRef> scope, Set<Role> roles, AccessActor actor);
 
     /**
      * Starts every Scheduled event whose start date has arrived. Each event is started in its own

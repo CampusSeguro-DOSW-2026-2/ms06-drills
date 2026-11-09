@@ -15,21 +15,22 @@ public interface AlertGateway {
      * @return the id that ALE gives to the alert
      * @throws ExternalServiceUnavailableException if ALE does not answer
      */
-    String createAlert(AlertCommand command);
+    String createAlert(AlertCommand command, AlertActor actor);
 
     /**
      * Changes the date on which a scheduled alert is sent.
      *
      * @throws ExternalServiceUnavailableException if ALE does not answer
      */
-    void reschedule(String alertId, Instant activationAt);
+    void reschedule(String alertId, Instant activationAt, AlertActor actor);
 
     /**
-     * Takes a scheduled alert back to draft (the event lost its start date).
+     * Archives an alert that is no longer needed (the event lost its start date). Archiving is
+     * idempotent in MS03.
      *
      * @throws ExternalServiceUnavailableException if ALE does not answer
      */
-    void backToDraft(String alertId);
+    void archive(String alertId, AlertActor actor);
 
     /**
      * Sends a scheduled alert now (the event just started). It is idempotent: activating an
@@ -37,5 +38,5 @@ public interface AlertGateway {
      *
      * @throws ExternalServiceUnavailableException if ALE does not answer
      */
-    void activate(String alertId);
+    void activate(String alertId, AlertActor actor);
 }

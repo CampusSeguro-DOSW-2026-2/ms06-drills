@@ -23,6 +23,7 @@ import java.util.UUID;
  * @param recipientRoles      roles that receive the alert
  * @param activationAt        date to send it (scheduled alert)
  * @param activateImmediately send it now
+ * @param alertTypes          MS03 alert types (EARTHQUAKE, FIRE, OTHER, OPERATIVA)
  */
 public record AlertCommand(
         UUID eventId,
@@ -33,5 +34,21 @@ public record AlertCommand(
         List<ScopeRef> scope,
         Set<Role> recipientRoles,
         Instant activationAt,
-        boolean activateImmediately) {
+        boolean activateImmediately,
+        List<String> alertTypes) {
+
+    /** Keeps the previous constructor for callers that do not use alert types. */
+    public AlertCommand(
+            UUID eventId,
+            EventAlertPurpose purpose,
+            boolean simulacro,
+            String title,
+            String instructions,
+            List<ScopeRef> scope,
+            Set<Role> recipientRoles,
+            Instant activationAt,
+            boolean activateImmediately) {
+        this(eventId, purpose, simulacro, title, instructions, scope, recipientRoles,
+                activationAt, activateImmediately, List.of("OTHER"));
+    }
 }

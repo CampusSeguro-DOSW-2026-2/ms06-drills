@@ -2,8 +2,10 @@ package edu.escuelaing.campusseguro.events.service.impl;
 
 import edu.escuelaing.campusseguro.events.client.EventStatePayload;
 import edu.escuelaing.campusseguro.events.client.ScopeRef;
+import edu.escuelaing.campusseguro.events.client.alert.AlertActor;
 import edu.escuelaing.campusseguro.events.client.alert.AlertCommand;
 import edu.escuelaing.campusseguro.events.client.alert.AlertGateway;
+import edu.escuelaing.campusseguro.events.client.alert.AlertTypes;
 import edu.escuelaing.campusseguro.events.client.brigade.BrigadeGateway;
 import edu.escuelaing.campusseguro.events.client.campus.CampusGateway;
 import edu.escuelaing.campusseguro.events.client.checkin.CheckInGateway;
@@ -135,7 +137,12 @@ public class EventUpdateServiceImpl implements EventUpdateService {
             Instant oldStart,
             boolean changed,
             List<EventWarning> warnings,
-            String actor) {
+            String actor,
+            Set<Role> actorRoles) {
+
+        AccessActor accessActor() {
+            return new AccessActor(actor, actorRoles);
+        }
     }
 
     @Override
@@ -172,7 +179,8 @@ public class EventUpdateServiceImpl implements EventUpdateService {
                 event.getScheduledStart(),
                 hasChanges(event, request, types, oldScope, scope, oldRoles, roles),
                 warnings,
-                actor.auditId());
+                actor.auditId(),
+                actor.roles());
         if (edit.changed()) {
             audit.record(AuditRecordType.MODIFICATION, "EVENT_UPDATED", actor.auditId(), event, "Event edited");
         }
@@ -191,7 +199,7 @@ public class EventUpdateServiceImpl implements EventUpdateService {
         apply(edit, request, types);
         if (isComplete(edit)) {
             SchedulingOutcome outcome = lifecycle.schedule(
-                    edit.event(), edit.scope(), edit.roles(), edit.actor());
+                    edit.event(), edit.scope(), edit.roles(), edit.accessActor());
             edit.warnings().addAll(outcome.warnings());
         }
         return respond(edit);
@@ -225,11 +233,11 @@ public class EventUpdateServiceImpl implements EventUpdateService {
             undo.add(() -> brigade.pushState(edit.before()));
             if (dateChanged) {
                 for (EventAlertEntity general : alertLinks.findByEventIdAndPurpose(event.getId(), EventAlertPurpose.GENERAL)) {
-                    alerts.reschedule(general.getAlertId(), event.getScheduledStart());
-                    undo.add(() -> alerts.reschedule(general.getAlertId(), edit.oldStart()));
+                    alerts.reschedule(general.getAlertId(), event.getScheduledStart(), alertActor(edit));
+                    undo.add(() -> alerts.reschedule(general.getAlertId(), edit.oldStart(), alertActor(edit)));
                 }
             }
-            alertLinks.saveAll(List.of(createAlert(event, brigadiersAlert(event, edit))));
+            alertLinks.saveAll(List.of(createAlert(event, brigadiersAlert(event, edit), edit)));
         } catch (ExternalServiceUnavailableException ex) {
             runUndo(undo);
             throw ex;
@@ -247,8 +255,8 @@ public class EventUpdateServiceImpl implements EventUpdateService {
         List<Runnable> undo = new ArrayList<>();
         try {
             for (EventAlertEntity link : general) {
-                alerts.backToDraft(link.getAlertId());
-                undo.add(() -> alerts.reschedule(link.getAlertId(), edit.oldStart()));
+                alerts.archive(link.getAlertId(), alertActor(edit));
+                undo.add(() -> alerts.reschedule(link.getAlertId(), edit.oldStart(), alertActor(edit)));
             }
             checkIn.pushState(draft);
             undo.add(() -> checkIn.pushState(edit.before()));
@@ -276,8 +284,8 @@ public class EventUpdateServiceImpl implements EventUpdateService {
             undo.add(() -> checkIn.pushState(edit.before()));
             brigade.pushState(now);
             undo.add(() -> brigade.pushState(edit.before()));
-            EventAlertEntity forBrigadiers = createAlert(event, brigadiersAlert(event, edit));
-            EventAlertEntity forParticipants = createAlert(event, participantsAlert(event, edit));
+            EventAlertEntity forBrigadiers = createAlert(event, brigadiersAlert(event, edit), edit);
+            EventAlertEntity forParticipants = createAlert(event, participantsAlert(event, edit), edit);
             alertLinks.saveAll(List.of(forBrigadiers, forParticipants));
         } catch (ExternalServiceUnavailableException ex) {
             runUndo(undo);
@@ -466,12 +474,16 @@ public class EventUpdateServiceImpl implements EventUpdateService {
     }
 
     /** Asks ALE for an alert and returns the link to save. */
-    private EventAlertEntity createAlert(EventEntity event, AlertCommand command) {
+    private EventAlertEntity createAlert(EventEntity event, AlertCommand command, Edit edit) {
         EventAlertEntity link = new EventAlertEntity();
         link.setEventId(event.getId());
-        link.setAlertId(alerts.createAlert(command));
+        link.setAlertId(alerts.createAlert(command, alertActor(edit)));
         link.setPurpose(command.purpose());
         return link;
+    }
+
+    private AlertActor alertActor(Edit edit) {
+        return AlertActor.from(edit.accessActor());
     }
 
     /** Alert for brigadiers: check the assignment after the changes. It is sent right away. */
@@ -479,7 +491,8 @@ public class EventUpdateServiceImpl implements EventUpdateService {
         return new AlertCommand(
                 event.getId(), EventAlertPurpose.EDIT, event.isSimulacro(),
                 BRIGADIERS_TITLE + event.getName(), BRIGADIERS_TEXT,
-                edit.scope(), Set.of(Role.BRIGADISTA), null, true);
+                edit.scope(), Set.of(Role.BRIGADISTA), null, true,
+                AlertTypes.from(event.getTypes()));
     }
 
     /** Alert for participants of a started event: the information changed. It is sent right away. */
@@ -487,7 +500,8 @@ public class EventUpdateServiceImpl implements EventUpdateService {
         return new AlertCommand(
                 event.getId(), EventAlertPurpose.EDIT, event.isSimulacro(),
                 PARTICIPANTS_TITLE + event.getName(), PARTICIPANTS_TEXT,
-                edit.scope(), edit.roles(), null, true);
+                edit.scope(), edit.roles(), null, true,
+                AlertTypes.from(event.getTypes()));
     }
 
     /** Runs the undo actions, last one first. A failure is only logged: the original error is the one that matters. */

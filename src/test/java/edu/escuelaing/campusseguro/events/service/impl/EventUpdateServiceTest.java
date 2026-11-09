@@ -3,6 +3,7 @@ package edu.escuelaing.campusseguro.events.service.impl;
 import edu.escuelaing.campusseguro.events.client.EventStatePayload;
 import edu.escuelaing.campusseguro.events.entity.enums.AuditRecordType;
 import edu.escuelaing.campusseguro.events.service.AuditService;
+import edu.escuelaing.campusseguro.events.client.alert.AlertActor;
 import edu.escuelaing.campusseguro.events.client.alert.AlertCommand;
 import edu.escuelaing.campusseguro.events.client.alert.AlertGateway;
 import edu.escuelaing.campusseguro.events.client.brigade.BrigadeGateway;
@@ -122,7 +123,7 @@ class EventUpdateServiceTest {
             return List.of(sismo, simulacro).stream().filter(t -> ids.contains(t.getId())).toList();
         });
         givenEvent(EventStatus.SCHEDULED, START, false);
-        when(alerts.createAlert(any(AlertCommand.class))).thenReturn("edit-1", "edit-2");
+        when(alerts.createAlert(any(AlertCommand.class), any(AlertActor.class))).thenReturn("edit-1", "edit-2");
     }
 
     /** Stores an event with one zone (z1), one role (ESTUDIANTE) and, if it has a date, a general alert. */
@@ -223,20 +224,20 @@ class EventUpdateServiceTest {
         assertEquals("New", response.name());
         assertEquals(EventStatus.DRAFT, response.status());
         verify(events).save(event);
-        verify(lifecycle, never()).schedule(any(), any(), any(), anyString());
+        verify(lifecycle, never()).schedule(any(), any(), any(), any());
         verify(audit).record(AuditRecordType.MODIFICATION, "EVENT_UPDATED", "coord-1", event, "Event edited");
     }
 
     @Test
     void aDraftIsScheduledWhenItBecomesComplete() {
         givenEvent(EventStatus.DRAFT, null, false);
-        when(lifecycle.schedule(any(), any(), any(), anyString()))
+        when(lifecycle.schedule(any(), any(), any(), any()))
                 .thenReturn(new SchedulingOutcome(true, List.of(), List.of()));
 
         service.update(id, request("Old", START, sismo.getId(), List.of("z1"), Set.of(Role.ESTUDIANTE)), coordinator);
 
         verify(lifecycle).schedule(event, List.of(new edu.escuelaing.campusseguro.events.client.ScopeRef(
-                ScopeType.ZONE, "z1")), Set.of(Role.ESTUDIANTE), "coord-1");
+                ScopeType.ZONE, "z1")), Set.of(Role.ESTUDIANTE), coordinator);
         assertEquals(START, event.getScheduledStart());
     }
 
@@ -290,7 +291,7 @@ class EventUpdateServiceTest {
         verify(events, never()).save(any(EventEntity.class));
         verify(checkIn, never()).pushState(any(EventStatePayload.class));
         verify(brigade, never()).pushState(any(EventStatePayload.class));
-        verify(alerts, never()).createAlert(any(AlertCommand.class));
+        verify(alerts, never()).createAlert(any(AlertCommand.class), any(AlertActor.class));
     }
 
     @Test
@@ -304,12 +305,12 @@ class EventUpdateServiceTest {
         verify(brigade).pushState(chi.getValue());
 
         ArgumentCaptor<AlertCommand> alert = ArgumentCaptor.forClass(AlertCommand.class);
-        verify(alerts).createAlert(alert.capture());
+        verify(alerts).createAlert(alert.capture(), any(AlertActor.class));
         assertEquals(EventAlertPurpose.EDIT, alert.getValue().purpose());
         assertTrue(alert.getValue().activateImmediately());
         assertEquals(Set.of(Role.BRIGADISTA), alert.getValue().recipientRoles());
 
-        verify(alerts, never()).reschedule(anyString(), any(Instant.class));
+        verify(alerts, never()).reschedule(anyString(), any(Instant.class), any(AlertActor.class));
         verify(stateService, never()).transition(any(), any(), anyString(), any());
         assertEquals("New", response.name());
         assertEquals(EventStatus.SCHEDULED, response.status());
@@ -320,7 +321,7 @@ class EventUpdateServiceTest {
         service.update(id,
                 request("Old", NEW_START, sismo.getId(), List.of("z1"), Set.of(Role.ESTUDIANTE)), coordinator);
 
-        verify(alerts).reschedule("general-1", NEW_START);
+        verify(alerts).reschedule(eq("general-1"), eq(NEW_START), any(AlertActor.class));
         assertEquals(NEW_START, event.getScheduledStart());
     }
 
@@ -331,13 +332,13 @@ class EventUpdateServiceTest {
         assertThrows(ExternalServiceUnavailableException.class, () -> service.update(id, renamed("New"), coordinator));
 
         verify(brigade, never()).pushState(any(EventStatePayload.class));
-        verify(alerts, never()).createAlert(any(AlertCommand.class));
+        verify(alerts, never()).createAlert(any(AlertCommand.class), any(AlertActor.class));
         verify(alertLinks, never()).saveAll(any());
     }
 
     @Test
     void aleDownWhileReschedulingRestoresChiAndBei() {
-        doThrow(down("MS03")).when(alerts).reschedule(anyString(), any(Instant.class));
+        doThrow(down("MS03")).when(alerts).reschedule(anyString(), any(Instant.class), any(AlertActor.class));
 
         assertThrows(ExternalServiceUnavailableException.class, () -> service.update(id,
                 request("New", NEW_START, sismo.getId(), List.of("z1"), Set.of(Role.ESTUDIANTE)), coordinator));
@@ -352,7 +353,7 @@ class EventUpdateServiceTest {
 
     @Test
     void aleDownWhileCreatingTheAlertRestoresChiAndBei() {
-        when(alerts.createAlert(any(AlertCommand.class))).thenThrow(down("MS03"));
+        when(alerts.createAlert(any(AlertCommand.class), any(AlertActor.class))).thenThrow(down("MS03"));
 
         assertThrows(ExternalServiceUnavailableException.class, () -> service.update(id, renamed("New"), coordinator));
 
@@ -365,7 +366,7 @@ class EventUpdateServiceTest {
         EventResponse response = service.update(id,
                 request("Old", null, sismo.getId(), List.of("z1"), Set.of(Role.ESTUDIANTE)), coordinator);
 
-        verify(alerts).backToDraft("general-1");
+        verify(alerts).archive(eq("general-1"), any(AlertActor.class));
         ArgumentCaptor<EventStatePayload> chi = ArgumentCaptor.forClass(EventStatePayload.class);
         verify(checkIn).pushState(chi.capture());
         assertEquals(EventStatus.DRAFT, chi.getValue().status());
@@ -382,7 +383,7 @@ class EventUpdateServiceTest {
         assertThrows(ExternalServiceUnavailableException.class, () -> service.update(id,
                 request("Old", null, sismo.getId(), List.of("z1"), Set.of(Role.ESTUDIANTE)), coordinator));
 
-        verify(alerts).reschedule("general-1", START);
+        verify(alerts).reschedule(eq("general-1"), eq(START), any(AlertActor.class));
         verify(checkIn, times(2)).pushState(any(EventStatePayload.class));
         verify(stateService, never()).transition(any(), any(), anyString(), any());
     }
@@ -432,7 +433,7 @@ class EventUpdateServiceTest {
         verify(brigade).pushState(chi.getValue());
 
         ArgumentCaptor<AlertCommand> alert = ArgumentCaptor.forClass(AlertCommand.class);
-        verify(alerts, times(2)).createAlert(alert.capture());
+        verify(alerts, times(2)).createAlert(alert.capture(), any(AlertActor.class));
         assertEquals(Set.of(Role.BRIGADISTA), alert.getAllValues().get(0).recipientRoles());
         assertEquals(Set.of(Role.ESTUDIANTE, Role.PROFESOR), alert.getAllValues().get(1).recipientRoles());
         assertEquals(EventAlertPurpose.EDIT, alert.getAllValues().get(1).purpose());
@@ -446,7 +447,7 @@ class EventUpdateServiceTest {
         service.update(id, same(), coordinator);
 
         verify(checkIn, never()).pushState(any(EventStatePayload.class));
-        verify(alerts, never()).createAlert(any(AlertCommand.class));
+        verify(alerts, never()).createAlert(any(AlertCommand.class), any(AlertActor.class));
     }
 
     @Test
@@ -457,6 +458,6 @@ class EventUpdateServiceTest {
         assertThrows(ExternalServiceUnavailableException.class, () -> service.update(id, renamed("New"), coordinator));
 
         verify(checkIn, times(2)).pushState(any(EventStatePayload.class));
-        verify(alerts, never()).createAlert(any(AlertCommand.class));
+        verify(alerts, never()).createAlert(any(AlertCommand.class), any(AlertActor.class));
     }
 }

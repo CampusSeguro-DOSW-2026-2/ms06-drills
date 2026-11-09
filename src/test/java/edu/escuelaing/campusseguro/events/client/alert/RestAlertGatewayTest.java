@@ -2,6 +2,7 @@ package edu.escuelaing.campusseguro.events.client.alert;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.containing;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.patch;
 import static com.github.tomakehurst.wiremock.client.WireMock.patchRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
@@ -26,16 +27,28 @@ class RestAlertGatewayTest extends WireMockTestBase {
 
     private static final String ALERTS = "/api/v1/alertas";
     private static final String RESCHEDULE = "/api/v1/alertas/{id}/programar";
-    private static final String DRAFT = "/api/v1/alertas/{id}/borrador";
+    private static final String ARCHIVE = "/api/v1/alertas/{id}/archivar";
     private static final String ACTIVATE = "/api/v1/alertas/{id}/activar";
+    private static final AlertActor ACTOR = new AlertActor(
+            "11111111-1111-4111-8111-111111111111",
+            Set.of(Role.ESTUDIANTE));
 
     private RestAlertGateway gateway() {
-        return new RestAlertGateway(factory, baseUrl(), ALERTS, RESCHEDULE, DRAFT, ACTIVATE);
+        return new RestAlertGateway(
+                factory,
+                baseUrl(),
+                "test-service-key",
+                "",
+                "ORGANIZADOR",
+                ALERTS,
+                RESCHEDULE,
+                ARCHIVE,
+                ACTIVATE);
     }
 
     private AlertCommand command(boolean drill) {
         return new AlertCommand(
-                UUID.randomUUID(),
+                UUID.fromString("22222222-2222-4222-8222-222222222222"),
                 EventAlertPurpose.GENERAL,
                 drill,
                 "Drill",
@@ -43,7 +56,8 @@ class RestAlertGatewayTest extends WireMockTestBase {
                 List.of(new ScopeRef(ScopeType.BUILDING, "b1"), new ScopeRef(ScopeType.ZONE, "z1")),
                 Set.of(Role.ESTUDIANTE),
                 Instant.parse("2026-12-01T15:00:00Z"),
-                false);
+                false,
+                List.of("OTHER"));
     }
 
     @Test
@@ -53,28 +67,34 @@ class RestAlertGatewayTest extends WireMockTestBase {
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"id\":\"alert-1\"}")));
 
-        String id = gateway().createAlert(command(true));
+        String id = gateway().createAlert(command(true), ACTOR);
 
         assertThat(id).isEqualTo("alert-1");
         server.verify(postRequestedFor(urlEqualTo(ALERTS))
-                .withRequestBody(containing("\"type\":\"SIMULATION\""))
+                .withHeader("X-Service-Key", equalTo("test-service-key"))
+                .withHeader("X-User-Id", equalTo(ACTOR.userId()))
+                .withHeader("X-User-Role", equalTo("ESTUDIANTE"))
+                .withHeader("X-Correlation-ID", containing("-"))
+                .withRequestBody(containing("\"types\":[\"OTHER\"]"))
                 .withRequestBody(containing("\"purpose\":\"GENERAL\""))
-                .withRequestBody(containing("\"origin\""))
+                .withRequestBody(containing("\"origin\":{\"type\":\"SIMULATION\""))
+                .withRequestBody(containing("\"simulationId\":\"22222222-2222-4222-8222-222222222222\""))
                 .withRequestBody(containing("BUILDING"))
                 .withRequestBody(containing("ZONE"))
                 .withRequestBody(containing("ESTUDIANTE")));
     }
 
     @Test
-    void realEventsUseTheOtherType() {
+    void realEventsUseTheManualOrigin() {
         server.stubFor(post(urlEqualTo(ALERTS))
                 .willReturn(aResponse().withStatus(201)
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"id\":\"alert-2\"}")));
 
-        gateway().createAlert(command(false));
+        gateway().createAlert(command(false), ACTOR);
 
-        server.verify(postRequestedFor(urlEqualTo(ALERTS)).withRequestBody(containing("\"type\":\"OTHER\"")));
+        server.verify(postRequestedFor(urlEqualTo(ALERTS))
+                .withRequestBody(containing("\"origin\":{\"type\":\"MANUAL\",\"simulationId\":null}")));
     }
 
     @Test
@@ -84,35 +104,41 @@ class RestAlertGatewayTest extends WireMockTestBase {
                         .withHeader("Content-Type", "application/json")
                         .withBody("{}")));
 
-        assertThrows(ExternalServiceUnavailableException.class, () -> gateway().createAlert(command(false)));
+        assertThrows(ExternalServiceUnavailableException.class,
+                () -> gateway().createAlert(command(false), ACTOR));
     }
 
     @Test
     void createFailureMeansUnavailable() {
         server.stubFor(post(urlEqualTo(ALERTS)).willReturn(aResponse().withStatus(500)));
 
-        assertThrows(ExternalServiceUnavailableException.class, () -> gateway().createAlert(command(false)));
+        assertThrows(ExternalServiceUnavailableException.class,
+                () -> gateway().createAlert(command(false), ACTOR));
     }
 
     @Test
     void reschedulesTheAlert() {
         server.stubFor(patch(urlEqualTo("/api/v1/alertas/alert-1/programar"))
-                .willReturn(aResponse().withStatus(204)));
+                .willReturn(aResponse().withStatus(200)));
 
-        gateway().reschedule("alert-1", Instant.parse("2026-12-02T10:00:00Z"));
+        gateway().reschedule("alert-1", Instant.parse("2026-12-02T10:00:00Z"), ACTOR);
 
         server.verify(patchRequestedFor(urlEqualTo("/api/v1/alertas/alert-1/programar"))
+                .withHeader("X-Service-Key", equalTo("test-service-key"))
+                .withHeader("X-User-Id", equalTo(ACTOR.userId()))
                 .withRequestBody(containing("2026-12-02T10:00:00Z")));
     }
 
     @Test
-    void returnsTheAlertToDraft() {
-        server.stubFor(patch(urlEqualTo("/api/v1/alertas/alert-1/borrador"))
-                .willReturn(aResponse().withStatus(204)));
+    void archivesTheAlert() {
+        server.stubFor(patch(urlEqualTo("/api/v1/alertas/alert-1/archivar"))
+                .willReturn(aResponse().withStatus(200)));
 
-        gateway().backToDraft("alert-1");
+        gateway().archive("alert-1", ACTOR);
 
-        server.verify(patchRequestedFor(urlEqualTo("/api/v1/alertas/alert-1/borrador")));
+        server.verify(patchRequestedFor(urlEqualTo("/api/v1/alertas/alert-1/archivar"))
+                .withHeader("X-Service-Key", equalTo("test-service-key"))
+                .withHeader("X-User-Role", equalTo("ESTUDIANTE")));
     }
 
     @Test
@@ -120,9 +146,11 @@ class RestAlertGatewayTest extends WireMockTestBase {
         server.stubFor(patch(urlEqualTo("/api/v1/alertas/alert-1/activar"))
                 .willReturn(aResponse().withStatus(200)));
 
-        gateway().activate("alert-1");
+        gateway().activate("alert-1", ACTOR);
 
-        server.verify(patchRequestedFor(urlEqualTo("/api/v1/alertas/alert-1/activar")));
+        server.verify(patchRequestedFor(urlEqualTo("/api/v1/alertas/alert-1/activar"))
+                .withHeader("X-Service-Key", equalTo("test-service-key"))
+                .withHeader("X-User-Id", equalTo(ACTOR.userId())));
     }
 
     @Test
@@ -130,18 +158,20 @@ class RestAlertGatewayTest extends WireMockTestBase {
         server.stubFor(patch(urlEqualTo("/api/v1/alertas/alert-1/activar"))
                 .willReturn(aResponse().withStatus(503)));
 
-        assertThrows(ExternalServiceUnavailableException.class, () -> gateway().activate("alert-1"));
+        assertThrows(ExternalServiceUnavailableException.class,
+                () -> gateway().activate("alert-1", ACTOR));
     }
 
     @Test
     void patchFailuresMeanUnavailable() {
-        server.stubFor(patch(urlEqualTo("/api/v1/alertas/alert-1/borrador"))
+        server.stubFor(patch(urlEqualTo("/api/v1/alertas/alert-1/archivar"))
                 .willReturn(aResponse().withStatus(404)));
         server.stubFor(patch(urlEqualTo("/api/v1/alertas/alert-1/programar"))
                 .willReturn(aResponse().withStatus(500)));
 
-        assertThrows(ExternalServiceUnavailableException.class, () -> gateway().backToDraft("alert-1"));
         assertThrows(ExternalServiceUnavailableException.class,
-                () -> gateway().reschedule("alert-1", Instant.now()));
+                () -> gateway().archive("alert-1", ACTOR));
+        assertThrows(ExternalServiceUnavailableException.class,
+                () -> gateway().reschedule("alert-1", Instant.now(), ACTOR));
     }
 }

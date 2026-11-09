@@ -124,7 +124,7 @@ class EventUpdateIT extends PostgresIntegrationTest {
 
         assertEquals(EventStatus.DRAFT, edited.status());
         assertEquals(0, alertCount(scheduled.id(), EventAlertPurpose.GENERAL));
-        assertTrue(alertStub.backToDraft().contains(generalId));
+        assertTrue(alertStub.archived().contains(generalId));
         assertEquals(EventStatus.DRAFT, checkInStub.lastState(scheduled.id()).orElseThrow().status());
         List<EventStateHistoryEntity> history = stateService.history(scheduled.id());
         assertEquals(1, history.stream()

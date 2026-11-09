@@ -104,7 +104,7 @@ public class EventCreationServiceImpl implements EventCreationService {
 
         List<EventAlertEntity> alerts = List.of();
         if (request.startDate() != null && !scope.isEmpty() && !roles.isEmpty()) {
-            SchedulingOutcome outcome = lifecycle.schedule(event, scope, roles, actor.auditId());
+            SchedulingOutcome outcome = lifecycle.schedule(event, scope, roles, actor);
             warnings.addAll(outcome.warnings());
             alerts = outcome.alerts();
         }
