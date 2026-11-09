@@ -26,7 +26,7 @@ spring:
           time_zone: UTC
 
 server:
-  port: ${SERVER_PORT:8083}
+  port: ${SERVER_PORT:8086}
 
 springdoc:
   paths-to-match: /api/**
@@ -46,13 +46,24 @@ app:
     bei-sync-scheduled-ms: ${BEI_SYNC_SCHEDULED_MS:30000}
     # How often the missing CHI/BEI numbers of finished events are requested again.
     evaluation-retry-ms: ${EVALUATION_RETRY_MS:30000}
+  gateway:
+    # All calls between microservices go through the API Gateway (integration standards, section 5).
+    url: ${GATEWAY_URL:http://localhost:8080}
+    # MS06 service key (>= 32 characters). Required outside the local/test profiles.
+    service-key: ${GATEWAY_SERVICE_KEY:}
+    # Identity used when an event starts on its own and the event has no valid creator id.
+    system-user-id: ${GATEWAY_SYSTEM_USER_ID:}
+    system-user-role: ${GATEWAY_SYSTEM_USER_ROLE:ORGANIZADOR}
+    alerts-path: ${GATEWAY_ALERTS_PATH:/api/v1/alertas}
+    reschedule-path: ${GATEWAY_ALERTS_RESCHEDULE_PATH:/api/v1/alertas/{id}/programar}
+    archive-path: ${GATEWAY_ALERTS_ARCHIVE_PATH:/api/v1/alertas/{id}/archivar}
+    activate-path: ${GATEWAY_ALERTS_ACTIVATE_PATH:/api/v1/alertas/{id}/activar}
   clients:
     connect-timeout-ms: 2000
-    read-timeout-ms: 5000
+    read-timeout-ms: 2000
     service-token: ${SERVICE_TOKEN:}
     ms01-url: ${MS01_URL:http://localhost:8081}
     ms02-url: ${MS02_URL:http://localhost:8082}
-    ms03-url: ${MS03_URL:http://localhost:8080}
     ms04-url: ${MS04_URL:http://localhost:8084}
     ms05-url: ${MS05_URL:http://localhost:8085}
   cors:
