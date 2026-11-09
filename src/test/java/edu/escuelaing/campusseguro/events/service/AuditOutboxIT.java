@@ -1,5 +1,6 @@
 package edu.escuelaing.campusseguro.events.service;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -23,6 +24,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -45,6 +47,17 @@ class AuditOutboxIT extends PostgresIntegrationTest {
     private StubAuditGateway auditStub;
 
     private final AccessActor coordinator = new AccessActor("coord-audit", Set.of(Role.COORDINADOR));
+
+    /**
+     * The database is shared by all integration tests, so old pending records of other tests may exist.
+     * The delivery sends the oldest records first and stops at the first failure, so those old records
+     * would hide the records of these tests. Starting from an empty outbox makes the tests independent.
+     */
+    @BeforeEach
+    void emptyTheOutbox() {
+        outbox.deleteAll();
+        auditStub.clear();
+    }
 
     @AfterEach
     void reset() {
