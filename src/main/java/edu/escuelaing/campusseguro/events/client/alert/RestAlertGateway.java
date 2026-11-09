@@ -186,6 +186,9 @@ public class RestAlertGateway implements AlertGateway {
     }
 
     private List<ScopeBody> groupScopes(List<ScopeRef> scope) {
+        if (scope == null || scope.isEmpty()) {
+            return List.of();
+        }
         Map<ScopeType, List<String>> grouped = new LinkedHashMap<>();
         for (ScopeRef ref : scope) {
             grouped.computeIfAbsent(ref.type(), type -> new ArrayList<>()).add(ref.id());
