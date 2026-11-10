@@ -28,6 +28,16 @@ spring:
 server:
   port: ${SERVER_PORT:8086}
 
+management:
+  endpoints:
+    web:
+      exposure:
+        # Only the health check is public (the API Gateway integration guide asks for it).
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
 springdoc:
   paths-to-match: /api/**
   swagger-ui:

@@ -1,8 +1,10 @@
 name: CI - calidad y contenedor
 
+# A push to develop is not listed here: deploy.yml calls this workflow (workflow_call) and then deploys,
+# so the tests do not run twice.
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
     branches: [main, develop]
   workflow_call:

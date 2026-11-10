@@ -19,5 +19,11 @@ RUN addgroup -S app && adduser -S app -G app
 COPY --from=build /app/target/*.jar app.jar
 USER app
 
-EXPOSE 8083
+# The API Gateway integration standard assigns port 808N to MSNN: 8086 for MS06.
+EXPOSE 8086
+
+# Docker marks the container as unhealthy if the health endpoint stops answering UP.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+  CMD wget -qO- http://localhost:8086/actuator/health | grep -q '"status":"UP"' || exit 1
+
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

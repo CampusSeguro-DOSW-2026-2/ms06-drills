@@ -1,0 +1,656 @@
+openapi: 3.1.0
+info:
+  title: MS06 - Eventos
+  description: "API de gestión de eventos y simulacros de CampusSeguro: creación,\
+    \ programación, ejecución, finalización y evaluación"
+  version: 1.0.0
+servers:
+- url: http://ms06-test:8086
+  description: Generated server url
+security:
+- bearerAuth: []
+paths:
+  /api/v1/eventos/{id}:
+    get:
+      tags:
+      - Events
+      summary: Detail and monitoring of an event
+      operationId: detail
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EventDetailResponse"
+    put:
+      tags:
+      - Events
+      summary: Edit an event or drill
+      operationId: update
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEventRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EventResponse"
+  /api/v1/tipos-evento:
+    get:
+      tags:
+      - Event types
+      summary: List the active event types
+      operationId: list
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EventTypeResponse"
+    post:
+      tags:
+      - Event types
+      summary: Add an event type (coordinator only)
+      operationId: create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEventTypeRequest"
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EventTypeResponse"
+  /api/v1/eventos:
+    get:
+      tags:
+      - Events
+      summary: List and search events
+      operationId: search
+      parameters:
+      - name: title
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - SCHEDULED
+          - IN_PROGRESS
+          - FINISHED
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageResponseEventSummaryResponse"
+    post:
+      tags:
+      - Events
+      summary: Create an event or drill
+      operationId: create_1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEventRequest"
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EventResponse"
+  /api/v1/eventos/{id}/finalizar:
+    patch:
+      tags:
+      - Events
+      summary: Finish an event in progress
+      operationId: finish
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EventFinishResponse"
+  /api/v1/eventos/{id}/panel:
+    get:
+      tags:
+      - Events
+      summary: Panel of an event in progress
+      operationId: panel
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/EventPanelResponse"
+  /api/v1/eventos/activos:
+    get:
+      tags:
+      - Events
+      summary: My events in progress
+      operationId: active
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EventSummaryResponse"
+components:
+  schemas:
+    CreateEventRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 150
+          minLength: 0
+        description:
+          type: string
+          maxLength: 1000
+          minLength: 0
+        typeIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          maxItems: 4
+          minItems: 0
+          uniqueItems: true
+        startDate:
+          type: string
+          format: date-time
+        scope:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScopeItemRequest"
+        participantRoles:
+          type: array
+          items:
+            type: string
+            enum:
+            - ESTUDIANTE
+            - PROFESOR
+            - ADMINISTRATIVO
+            - BRIGADISTA
+            - COORDINADOR
+            - ORGANIZADOR
+            - ADMIN
+            - AUDITOR
+          uniqueItems: true
+      required:
+      - name
+      - typeIds
+    ScopeItemRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+          - BUILDING
+          - ZONE
+        id:
+          type: string
+          maxLength: 64
+          minLength: 0
+      required:
+      - id
+      - type
+    AlertLink:
+      type: object
+      properties:
+        purpose:
+          type: string
+          enum:
+          - BRIGADISTS
+          - GENERAL
+          - EDIT
+          - FINISH
+        alertId:
+          type: string
+    EventResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - SCHEDULED
+          - IN_PROGRESS
+          - FINISHED
+        simulacro:
+          type: boolean
+        startDate:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        types:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventTypeResponse"
+        scope:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScopeItem"
+        participantRoles:
+          type: array
+          items:
+            type: string
+            enum:
+            - ESTUDIANTE
+            - PROFESOR
+            - ADMINISTRATIVO
+            - BRIGADISTA
+            - COORDINADOR
+            - ORGANIZADOR
+            - ADMIN
+            - AUDITOR
+          uniqueItems: true
+        alerts:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlertLink"
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventWarning"
+    EventTypeResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        active:
+          type: boolean
+    EventWarning:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+    ScopeItem:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+          - BUILDING
+          - ZONE
+        id:
+          type: string
+    CreateEventTypeRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 80
+          minLength: 0
+      required:
+      - name
+    BrigadierResult:
+      type: object
+      properties:
+        brigadierId:
+          type: string
+        casesAttended:
+          type: integer
+          format: int32
+        casesResolved:
+          type: integer
+          format: int32
+    EvaluationResponse:
+      type: object
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        evaluatedAt:
+          type: string
+          format: date-time
+        complete:
+          type: boolean
+        noRecords:
+          type: boolean
+        totalCheckins:
+          type: integer
+          format: int32
+        checkinParticipationPct:
+          type: number
+        checkInByStatus:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int32
+        totalIncidents:
+          type: integer
+          format: int32
+        casesAttended:
+          type: integer
+          format: int32
+        casesResolved:
+          type: integer
+          format: int32
+        avgAttentionSeconds:
+          type: integer
+          format: int64
+        brigadiers:
+          type: array
+          items:
+            $ref: "#/components/schemas/BrigadierResult"
+    EventFinishResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - SCHEDULED
+          - IN_PROGRESS
+          - FINISHED
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        evaluation:
+          $ref: "#/components/schemas/EvaluationResponse"
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventWarning"
+    EventSummaryResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - SCHEDULED
+          - IN_PROGRESS
+          - FINISHED
+        simulacro:
+          type: boolean
+        startDate:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        types:
+          type: array
+          items:
+            type: string
+        scope:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScopeItem"
+        participantRoles:
+          type: array
+          items:
+            type: string
+            enum:
+            - ESTUDIANTE
+            - PROFESOR
+            - ADMINISTRATIVO
+            - BRIGADISTA
+            - COORDINADOR
+            - ORGANIZADOR
+            - ADMIN
+            - AUDITOR
+          uniqueItems: true
+        createdBy:
+          type: string
+    PageResponseEventSummaryResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventSummaryResponse"
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+    Brigadier:
+      type: object
+      properties:
+        brigadierId:
+          type: string
+        name:
+          type: string
+        active:
+          type: boolean
+    CheckInProgress:
+      type: object
+      properties:
+        updatedAt:
+          type: string
+          format: date-time
+        totalCheckins:
+          type: integer
+          format: int32
+        byStatus:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int32
+        participationPct:
+          type: number
+    EventDetailResponse:
+      type: object
+      properties:
+        event:
+          $ref: "#/components/schemas/EventResponse"
+        monitoring:
+          $ref: "#/components/schemas/EventMonitoringResponse"
+        evaluation:
+          $ref: "#/components/schemas/EvaluationResponse"
+    EventMonitoringResponse:
+      type: object
+      properties:
+        checkIn:
+          $ref: "#/components/schemas/CheckInProgress"
+        incidents:
+          $ref: "#/components/schemas/IncidentProgress"
+        brigadiersByZone:
+          type: array
+          items:
+            $ref: "#/components/schemas/ZoneBrigadiers"
+        brigadiersSyncedAt:
+          type: string
+          format: date-time
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventWarning"
+    IncidentProgress:
+      type: object
+      properties:
+        updatedAt:
+          type: string
+          format: date-time
+        totalIncidents:
+          type: integer
+          format: int32
+        attended:
+          type: integer
+          format: int32
+        resolved:
+          type: integer
+          format: int32
+        pending:
+          type: integer
+          format: int32
+        avgAttentionSeconds:
+          type: integer
+          format: int64
+    ZoneBrigadiers:
+      type: object
+      properties:
+        zoneId:
+          type: string
+        activeCount:
+          type: integer
+          format: int64
+        brigadiers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Brigadier"
+    EventPanelResponse:
+      type: object
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        simulacro:
+          type: boolean
+        startedAt:
+          type: string
+          format: date-time
+        routes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Route"
+        routesAvailable:
+          type: boolean
+        checkInEnabled:
+          type: boolean
+        incidentRegistrationEnabled:
+          type: boolean
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventWarning"
+    Route:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+          - BUILDING
+          - ZONE
+        id:
+          type: string
+        name:
+          type: string
+        url:
+          type: string
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

@@ -1,0 +1,34 @@
+name: Deploy - producción
+
+# Manual: Actions > "Deploy - producción" > Run workflow (from the main branch).
+# The environment ms06-prod asks the required reviewer for approval before it runs.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-ms06-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Desplegar en la VM (producción)
+    # Switch: the job is skipped (not left waiting for a runner) until the repository variable
+    # DEPLOY_ENABLED is set to 'true'. Settings > Secrets and variables > Actions > Variables.
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    runs-on: [self-hosted, ms06]
+    environment: ms06-prod
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Desplegar
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          GATEWAY_URL: ${{ vars.GATEWAY_URL }}
+          GATEWAY_SERVICE_KEY: ${{ secrets.GATEWAY_SERVICE_KEY }}
+          GATEWAY_SYSTEM_USER_ID: ${{ vars.GATEWAY_SYSTEM_USER_ID }}
+          SCHEDULING_ENABLED: ${{ vars.SCHEDULING_ENABLED }}
+        run: bash infra/deploy.sh prod

@@ -1,0 +1,43 @@
+name: Deploy - prueba
+
+# Every push to develop runs the CI (tests + coverage) and, if it passes, deploys the test environment.
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-ms06-test
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      packages: write
+
+  deploy:
+    name: Desplegar en la VM (prueba)
+    needs: ci
+    # Switch: the job is skipped (not left waiting for a runner) until the repository variable
+    # DEPLOY_ENABLED is set to 'true'. Settings > Secrets and variables > Actions > Variables.
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    # Self-hosted runner installed on the Azure VM with the label "ms06".
+    runs-on: [self-hosted, ms06]
+    environment: ms06-test
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Desplegar
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          GATEWAY_URL: ${{ vars.GATEWAY_URL }}
+          GATEWAY_SERVICE_KEY: ${{ secrets.GATEWAY_SERVICE_KEY }}
+          GATEWAY_SYSTEM_USER_ID: ${{ vars.GATEWAY_SYSTEM_USER_ID }}
+          SCHEDULING_ENABLED: ${{ vars.SCHEDULING_ENABLED }}
+        run: bash infra/deploy.sh test
