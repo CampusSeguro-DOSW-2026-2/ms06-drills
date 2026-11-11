@@ -2,7 +2,10 @@ package edu.escuelaing.campusseguro.events.client.brigade;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.containing;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.matching;
 import static com.github.tomakehurst.wiremock.client.WireMock.put;
 import static com.github.tomakehurst.wiremock.client.WireMock.putRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
@@ -31,7 +34,47 @@ class RestBrigadeGatewayTest extends WireMockTestBase {
     private final UUID eventId = UUID.randomUUID();
 
     private RestBrigadeGateway gateway() {
-        return new RestBrigadeGateway(factory, baseUrl(), STATE, BRIGADIERS, INDICATORS);
+        return new RestBrigadeGateway(
+                factory, baseUrl(), "service-key-with-at-least-32-characters", "", "SERVICE_MS06",
+                STATE, BRIGADIERS, INDICATORS);
+    }
+
+    @Test
+    void requiresTheServiceKey() {
+        assertThrows(IllegalStateException.class, () -> new RestBrigadeGateway(
+                factory, baseUrl(), " ", "", "SERVICE_MS06", STATE, BRIGADIERS, INDICATORS));
+    }
+
+    @Test
+    void everyCallCarriesTheServiceHeadersAndTheMs06Role() {
+        String path = "/api/v1/bei/eventos/" + eventId + "/brigadistas";
+        server.stubFor(get(urlEqualTo(path)).willReturn(aResponse().withStatus(200)
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"brigadistas\":[]}")));
+
+        gateway().brigadiers(eventId);
+
+        server.verify(getRequestedFor(urlEqualTo(path))
+                .withHeader("X-Service-Key", equalTo("service-key-with-at-least-32-characters"))
+                .withHeader("X-Service-Name", equalTo("MS06"))
+                .withHeader("X-User-Role", equalTo("SERVICE_MS06"))
+                .withHeader("X-User-Id", equalTo("ms06-service"))
+                .withHeader("X-Correlation-ID", matching(".+"))
+                .withoutHeader("Authorization"));
+    }
+
+    @Test
+    void theSystemUserIdIsUsedWhenConfigured() {
+        String path = "/api/v1/bei/eventos/" + eventId + "/estado";
+        String systemUser = "b256f8d8-e1ab-451b-ac4b-06cf67defb25";
+        server.stubFor(put(urlEqualTo(path)).willReturn(aResponse().withStatus(204)));
+
+        new RestBrigadeGateway(
+                        factory, baseUrl(), "service-key-with-at-least-32-characters", systemUser,
+                        "SERVICE_MS06", STATE, BRIGADIERS, INDICATORS)
+                .pushState(payload(false));
+
+        server.verify(putRequestedFor(urlEqualTo(path)).withHeader("X-User-Id", equalTo(systemUser)));
     }
 
     private EventStatePayload payload(boolean drill) {

@@ -67,6 +67,8 @@ app:
     # Identity used when an event starts on its own and the event has no valid creator id.
     system-user-id: ${GATEWAY_SYSTEM_USER_ID:}
     system-user-role: ${GATEWAY_SYSTEM_USER_ROLE:ORGANIZADOR}
+    # Role MS05 requires on its internal routes (/api/v1/bei/eventos/**) for calls coming from MS06.
+    ms05-service-role: ${GATEWAY_MS05_SERVICE_ROLE:SERVICE_MS06}
     alerts-path: ${GATEWAY_ALERTS_PATH:/api/v1/alertas}
     reschedule-path: ${GATEWAY_ALERTS_RESCHEDULE_PATH:/api/v1/alertas/{id}/programar}
     archive-path: ${GATEWAY_ALERTS_ARCHIVE_PATH:/api/v1/alertas/{id}/archivar}
@@ -75,7 +77,6 @@ app:
     connect-timeout-ms: 2000
     read-timeout-ms: 2000
     service-token: ${SERVICE_TOKEN:}
-    ms05-url: ${MS05_URL:http://localhost:8085}
   security:
     roles-claim: ${JWT_ROLES_CLAIM:roles}
 
