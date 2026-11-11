@@ -30,6 +30,7 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
         if (value == null || value.isBlank()) {
             value = UUID.randomUUID().toString();
         }
+        request.setAttribute(CorrelationIds.ATTRIBUTE, value);
         CorrelationIds.set(value);
         response.setHeader(CorrelationIds.HEADER, value);
         try {

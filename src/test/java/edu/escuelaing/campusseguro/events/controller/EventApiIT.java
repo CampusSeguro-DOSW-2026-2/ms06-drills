@@ -68,7 +68,7 @@ class EventApiIT extends PostgresIntegrationTest {
         mvc.perform(post("/api/v1/eventos").with(as("ESTUDIANTE"))
                         .contentType(MediaType.APPLICATION_JSON).content(body("x", typeId("SISMO"))))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+                .andExpect(jsonPath("$.codigo").value("PROHIBIDO"));
     }
 
     @Test
@@ -101,8 +101,8 @@ class EventApiIT extends PostgresIntegrationTest {
         mvc.perform(post("/api/v1/eventos").with(as("COORDINADOR"))
                         .contentType(MediaType.APPLICATION_JSON).content(body("", typeId("SISMO"))))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-                .andExpect(jsonPath("$.details[0].field").value("name"));
+                .andExpect(jsonPath("$.codigo").value("VALIDACION"))
+                .andExpect(jsonPath("$.errores[0].campo").value("name"));
     }
 
     @Test
@@ -110,7 +110,7 @@ class EventApiIT extends PostgresIntegrationTest {
         mvc.perform(post("/api/v1/eventos").with(as("COORDINADOR"))
                         .contentType(MediaType.APPLICATION_JSON).content(body("x", UUID.randomUUID())))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.details[0].field").value("typeIds"));
+                .andExpect(jsonPath("$.errores[0].campo").value("typeIds"));
     }
 
     @Test
@@ -119,7 +119,7 @@ class EventApiIT extends PostgresIntegrationTest {
 
         mvc.perform(post("/api/v1/eventos").with(as("COORDINADOR")).contentType(MediaType.APPLICATION_JSON).content(json))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.details[0].field").value("startDate"));
+                .andExpect(jsonPath("$.errores[0].campo").value("startDate"));
     }
 
     @Test
@@ -191,7 +191,7 @@ class EventApiIT extends PostgresIntegrationTest {
         mvc.perform(put("/api/v1/eventos/" + UUID.randomUUID()).with(as("COORDINADOR"))
                         .contentType(MediaType.APPLICATION_JSON).content(body("x", typeId("SISMO"))))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
+                .andExpect(jsonPath("$.codigo").value("NO_ENCONTRADO"));
     }
 
     @Test
@@ -201,7 +201,7 @@ class EventApiIT extends PostgresIntegrationTest {
         mvc.perform(put("/api/v1/eventos/" + id).with(as("COORDINADOR"))
                         .contentType(MediaType.APPLICATION_JSON).content(body("", typeId("SISMO"))))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.details[0].field").value("name"));
+                .andExpect(jsonPath("$.errores[0].campo").value("name"));
     }
 
     /** Creates a draft with one zone and forces it to In progress, as the start job would do. */
@@ -323,7 +323,7 @@ class EventApiIT extends PostgresIntegrationTest {
 
         mvc.perform(get("/api/v1/eventos/" + id + "/panel").with(as("COORDINADOR")))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("EVENT_NOT_ACTIVE"));
+                .andExpect(jsonPath("$.codigo").value("EVENTO_NO_ACTIVO"));
     }
 
     @Test
@@ -351,7 +351,7 @@ class EventApiIT extends PostgresIntegrationTest {
 
         mvc.perform(patch("/api/v1/eventos/" + id + "/finalizar").with(as("COORDINADOR")))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("INVALID_STATE_TRANSITION"));
+                .andExpect(jsonPath("$.codigo").value("TRANSICION_INVALIDA"));
     }
 
     @Test
@@ -390,8 +390,9 @@ class EventApiIT extends PostgresIntegrationTest {
         mvc.perform(get("/api/v1/no-such-path").with(as("COORDINADOR")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
-                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
-                .andExpect(jsonPath("$.path").value("/api/v1/no-such-path"));
+                .andExpect(jsonPath("$.codigo").value("NO_ENCONTRADO"))
+                .andExpect(jsonPath("$.errores").isEmpty())
+                .andExpect(jsonPath("$.correlation_id").exists());
     }
 
     @Test
@@ -399,6 +400,6 @@ class EventApiIT extends PostgresIntegrationTest {
         mvc.perform(delete("/api/v1/eventos").with(as("COORDINADOR")))
                 .andExpect(status().isMethodNotAllowed())
                 .andExpect(jsonPath("$.status").value(405))
-                .andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"));
+                .andExpect(jsonPath("$.codigo").value("METODO_NO_PERMITIDO"));
     }
 }

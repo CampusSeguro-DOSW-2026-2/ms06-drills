@@ -11,54 +11,64 @@ public enum ErrorCode {
 
     VALIDATION_ERROR(
             HttpStatus.BAD_REQUEST,
-            "The submitted data is invalid"),
-
+            "VALIDACION",
+            "Los datos enviados no son válidos"),
     UNAUTHORIZED(
             HttpStatus.UNAUTHORIZED,
-            "Authentication is required or the token is invalid"),
+            "NO_AUTENTICADO",
+            "Se requiere autenticación o la identidad no es válida"),
     FORBIDDEN(
             HttpStatus.FORBIDDEN,
-            "You do not have permission to perform this operation"),
-
+            "PROHIBIDO",
+            "No tienes permiso para realizar esta operación"),
     RESOURCE_NOT_FOUND(
             HttpStatus.NOT_FOUND,
-            "The requested resource was not found"),
+            "NO_ENCONTRADO",
+            "El recurso solicitado no existe"),
     METHOD_NOT_ALLOWED(
             HttpStatus.METHOD_NOT_ALLOWED,
-            "The HTTP method is not allowed"),
+            "METODO_NO_PERMITIDO",
+            "El método HTTP no está permitido"),
     UNSUPPORTED_MEDIA_TYPE(
             HttpStatus.UNSUPPORTED_MEDIA_TYPE,
-            "The content type is not supported"),
-
+            "TIPO_NO_SOPORTADO",
+            "El tipo de contenido no está soportado"),
     CONFLICT(
             HttpStatus.CONFLICT,
-            "The operation conflicts with the current state of the resource"),
+            "CONFLICTO",
+            "La operación entra en conflicto con el estado actual del recurso"),
     CONCURRENT_MODIFICATION(
             HttpStatus.CONFLICT,
-            "The resource was modified by another user"),
+            "MODIFICACION_CONCURRENTE",
+            "El recurso fue modificado por otro usuario"),
     INVALID_STATE_TRANSITION(
             HttpStatus.CONFLICT,
-            "The requested status change is not allowed"),
+            "TRANSICION_INVALIDA",
+            "El cambio de estado solicitado no está permitido"),
     EVENT_NOT_EDITABLE(
             HttpStatus.CONFLICT,
-            "The event cannot be edited in its current status"),
-
+            "EVENTO_NO_EDITABLE",
+            "El evento no se puede editar en su estado actual"),
     EVENT_NOT_ACTIVE(
             HttpStatus.CONFLICT,
-            "The event is not in progress"),
-
+            "EVENTO_NO_ACTIVO",
+            "El evento no está en ejecución"),
     EXTERNAL_SERVICE_UNAVAILABLE(
             HttpStatus.SERVICE_UNAVAILABLE,
-            "An external service is temporarily unavailable. Please try again later"),
+            "SERVICIO_EXTERNO_NO_DISPONIBLE",
+            "Un servicio externo no está disponible. Intenta de nuevo más tarde"),
     INTERNAL_ERROR(
             HttpStatus.INTERNAL_SERVER_ERROR,
-            "An unexpected error occurred");
+            "ERROR_INTERNO",
+            "Ocurrió un error inesperado");
 
     private final HttpStatus status;
+    private final String codigo;
     private final String defaultMessage;
 
-    ErrorCode(HttpStatus status, String defaultMessage) {
+    ErrorCode(HttpStatus status, String codigo, String defaultMessage) {
         this.status = status;
+        this.codigo = codigo;
         this.defaultMessage = defaultMessage;
     }
 
@@ -66,10 +76,12 @@ public enum ErrorCode {
         return status;
     }
 
-    /**
-     * Maps an HTTP status to its error code (used for errors that do not come from a business rule).
-     * An unknown 4xx status is reported as a validation error and any 5xx as an internal error.
-     */
+    /** Code written in the {@code codigo} field of the response (API standards, section 7.2). */
+    public String codigo() {
+        return codigo;
+    }
+
+    /** Maps an HTTP status to its code (used for errors raised by Spring or the web server). */
     public static ErrorCode fromStatus(int httpStatus) {
         return switch (httpStatus) {
             case 400 -> VALIDATION_ERROR;

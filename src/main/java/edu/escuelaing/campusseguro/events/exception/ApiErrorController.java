@@ -1,8 +1,8 @@
 package edu.escuelaing.campusseguro.events.exception;
 
+import edu.escuelaing.campusseguro.events.client.CorrelationIds;
 import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.http.HttpServletRequest;
-import java.time.Clock;
 import java.util.List;
 import org.springframework.boot.webmvc.error.ErrorController;
 import org.springframework.http.MediaType;
@@ -20,25 +20,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class ApiErrorController implements ErrorController {
 
-    private final Clock clock;
-
-    /** @param clock application clock, for the timestamp of the error */
-    public ApiErrorController(Clock clock) {
-        this.clock = clock;
-    }
-
-    /** Builds the error body from the status and path the servlet container stored in the request. */
+    /** Builds the error body from the status the servlet container stored in the request. */
     @RequestMapping("/error")
     public ResponseEntity<ErrorResponse> error(HttpServletRequest request) {
         Object statusAttribute = request.getAttribute(RequestDispatcher.ERROR_STATUS_CODE);
         int status = statusAttribute instanceof Integer value ? value : 500;
         ErrorCode code = ErrorCode.fromStatus(status);
 
-        Object pathAttribute = request.getAttribute(RequestDispatcher.ERROR_REQUEST_URI);
-        String path = pathAttribute == null ? request.getRequestURI() : pathAttribute.toString();
-
-        ErrorResponse body = new ErrorResponse(
-                clock.instant(), status, code.name(), code.defaultMessage(), path, List.of());
+        ErrorResponse body = ErrorResponse.of(code, code.defaultMessage(), List.of(), CorrelationIds.of(request));
         return ResponseEntity.status(status).contentType(MediaType.APPLICATION_JSON).body(body);
     }
 }

@@ -1,14 +1,12 @@
 package edu.escuelaing.campusseguro.events.security;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import edu.escuelaing.campusseguro.events.exception.ErrorCode;
 import edu.escuelaing.campusseguro.events.exception.ErrorResponseWriter;
 import java.nio.charset.StandardCharsets;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -19,8 +17,7 @@ import tools.jackson.databind.json.JsonMapper;
 /** Tests that security 401 and 403 are written in the standard error format. */
 class SecurityErrorWritersTest {
 
-    private final Clock clock = Clock.fixed(Instant.parse("2026-11-07T12:00:00Z"), ZoneOffset.UTC);
-    private final ErrorResponseWriter writer = new ErrorResponseWriter(JsonMapper.builder().build(), clock);
+    private final ErrorResponseWriter writer = new ErrorResponseWriter(JsonMapper.builder().build());
 
     private String body(MockHttpServletResponse response) throws Exception {
         return response.getContentAsString(StandardCharsets.UTF_8);
@@ -29,6 +26,7 @@ class SecurityErrorWritersTest {
     @Test
     void writerProducesTheJsonErrorBody() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/eventos");
+        request.addHeader("X-Correlation-ID", "11111111-1111-4111-8111-111111111111");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         writer.write(request, response, ErrorCode.CONFLICT);
@@ -36,9 +34,12 @@ class SecurityErrorWritersTest {
         assertEquals(409, response.getStatus());
         assertTrue(response.getContentType().startsWith("application/json"));
         String json = body(response);
-        assertTrue(json.contains("\"code\":\"CONFLICT\""), json);
+        assertTrue(json.contains("\"codigo\":\"CONFLICTO\""), json);
         assertTrue(json.contains("\"status\":409"), json);
-        assertTrue(json.contains("\"path\":\"/api/v1/eventos\""), json);
+        assertTrue(json.contains("\"errores\":[]"), json);
+        assertTrue(json.contains("\"correlation_id\":\"11111111-1111-4111-8111-111111111111\""), json);
+        assertFalse(json.contains("\"path\""), json);
+        assertFalse(json.contains("\"timestamp\""), json);
     }
 
     @Test
@@ -52,7 +53,7 @@ class SecurityErrorWritersTest {
                 new BadCredentialsException("bad"));
 
         assertEquals(401, response.getStatus());
-        assertTrue(body(response).contains("\"code\":\"UNAUTHORIZED\""));
+        assertTrue(body(response).contains("\"codigo\":\"NO_AUTENTICADO\""));
     }
 
     @Test
@@ -66,6 +67,6 @@ class SecurityErrorWritersTest {
                 new AccessDeniedException("denied"));
 
         assertEquals(403, response.getStatus());
-        assertTrue(body(response).contains("\"code\":\"FORBIDDEN\""));
+        assertTrue(body(response).contains("\"codigo\":\"PROHIBIDO\""));
     }
 }

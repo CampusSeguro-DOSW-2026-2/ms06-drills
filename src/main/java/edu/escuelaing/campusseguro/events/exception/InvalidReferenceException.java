@@ -14,7 +14,7 @@ public class InvalidReferenceException extends BusinessException {
      */
     public InvalidReferenceException(String field, List<String> invalidIds) {
         super(ErrorCode.VALIDATION_ERROR,
-                "Unknown or inactive values in '" + field + "': " + invalidIds);
+                "Valores desconocidos o inactivos en '" + field + "': " + invalidIds);
         this.field = field;
         this.invalidIds = List.copyOf(invalidIds);
     }
