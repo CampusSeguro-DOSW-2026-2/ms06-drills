@@ -75,7 +75,6 @@ app:
     connect-timeout-ms: 2000
     read-timeout-ms: 2000
     service-token: ${SERVICE_TOKEN:}
-    ms02-url: ${MS02_URL:http://localhost:8082}
     ms05-url: ${MS05_URL:http://localhost:8085}
   security:
     roles-claim: ${JWT_ROLES_CLAIM:roles}
