@@ -5,14 +5,14 @@ import edu.escuelaing.campusseguro.events.exception.InvalidReferenceException;
 import edu.escuelaing.campusseguro.events.security.Role;
 import java.util.Set;
 
-/** Calls to AUT (MS01 - Identity and access). */
+/** Checks of the roles that an event invites (the catalog is the local {@code Role} enum). */
 public interface IdentityGateway {
 
     /**
-     * Checks that the roles invited to an event exist in AUT.
+     * Checks that the roles invited to an event belong to the official catalog.
      *
      * @throws InvalidReferenceException           if some role is unknown
-     * @throws ExternalServiceUnavailableException if AUT does not answer
+     * @throws ExternalServiceUnavailableException if the check needs a service that does not answer
      */
     void validateRoles(Set<Role> roles);
 }
