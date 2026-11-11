@@ -9,7 +9,6 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -21,7 +20,7 @@ import org.springframework.security.web.SecurityFilterChain;
  *
  * <ul>
  *   <li>Every request needs a token, except the documentation (Swagger/OpenAPI)
- *       and CORS {@code OPTIONS} requests.</li>
+ *       and {@code OPTIONS} requests (the API Gateway handles CORS, not MS06).</li>
  *   <li>Roles are read from the token with {@link JwtRoleConverter}.</li>
  *   <li>Role permissions are declared on each endpoint with {@code @PreAuthorize}
  *       (that is why method security is enabled).</li>
@@ -46,7 +45,6 @@ public class SecurityConfig {
             RestAccessDeniedHandler accessDeniedHandler) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
-                .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()

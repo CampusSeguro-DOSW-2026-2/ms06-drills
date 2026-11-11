@@ -262,19 +262,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     /** Maps an HTTP status to its {@link ErrorCode}. */
     private ErrorCode codeFor(HttpStatusCode status) {
-        return switch (status.value()) {
-            case 400 -> ErrorCode.VALIDATION_ERROR;
-            case 401 -> ErrorCode.UNAUTHORIZED;
-            case 403 -> ErrorCode.FORBIDDEN;
-            case 404 -> ErrorCode.RESOURCE_NOT_FOUND;
-            case 405 -> ErrorCode.METHOD_NOT_ALLOWED;
-            case 409 -> ErrorCode.CONFLICT;
-            case 415 -> ErrorCode.UNSUPPORTED_MEDIA_TYPE;
-            case 503 -> ErrorCode.EXTERNAL_SERVICE_UNAVAILABLE;
-            default -> status.is5xxServerError()
-                    ? ErrorCode.INTERNAL_ERROR
-                    : ErrorCode.VALIDATION_ERROR;
-        };
+        return ErrorCode.fromStatus(status.value());
     }
 
     private String pathOf(WebRequest request) {
