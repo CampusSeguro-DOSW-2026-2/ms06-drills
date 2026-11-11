@@ -13,8 +13,9 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * A call to CHI, BEI or ALE that failed when an event started. The event starts anyway, so
- * the failure is kept here and repeated later until the other service answers.
+ * A call to CHI, BEI or ALE that failed when an event started, or the call to BEI that failed when the
+ * event was scheduled. The event goes on anyway, so the failure is kept here and repeated later
+ * until the other service answers.
  * There is one row per event and module.
  */
 @Entity

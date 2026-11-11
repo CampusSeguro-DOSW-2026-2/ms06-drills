@@ -21,7 +21,9 @@ import org.springframework.security.access.AccessDeniedException;
  * <p>Order: CHI, then BEI, then the two ALE alerts, and only at the end the status change.
  * <ul>
  *   <li>CHI down: an exception is thrown. The caller's transaction is rolled back, so nothing is saved.</li>
- *   <li>BEI or ALE down: everything done so far is undone (best effort) and the event stays Draft.</li>
+ *   <li>BEI down: the event is scheduled anyway. The call is saved and repeated until BEI answers
+ *       (or until the event starts, when BEI is told again); the brigadiers may learn about the event late.</li>
+ *   <li>ALE down: everything done so far is undone (best effort) and the event stays Draft.</li>
  * </ul>
  *
  * <h3>Starting (RF-EVE-05)</h3>
