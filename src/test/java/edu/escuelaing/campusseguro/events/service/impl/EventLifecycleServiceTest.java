@@ -181,19 +181,40 @@ class EventLifecycleServiceTest {
     }
 
     @Test
-    void beiDownKeepsTheEventAsDraftAndUndoesChi() {
+    void beiDownSchedulesTheEventAnywayAndKeepsTheCallPending() {
         doThrow(down("MS05")).when(brigade).pushState(any(EventStatePayload.class));
+
+        SchedulingOutcome outcome = service.schedule(event, scope, roles, actor("coord-1"));
+
+        assertTrue(outcome.scheduled());
+        assertEquals("BRIGADIERS_PENDING", outcome.warnings().get(0).code());
+        assertEquals(2, outcome.alerts().size());
+        // CHI was told once and nothing was undone.
+        verify(checkIn, times(1)).pushState(any(EventStatePayload.class));
+        verify(stateService).transition(event.getId(), EventStatus.SCHEDULED, "coord-1", "Scheduled with all its data");
+        // The failed call is saved so that it is repeated later.
+        ArgumentCaptor<EventStartFailureEntity> saved = ArgumentCaptor.forClass(EventStartFailureEntity.class);
+        verify(failures).save(saved.capture());
+        assertEquals(event.getId(), saved.getValue().getEventId());
+        assertEquals(ExternalModule.BEI, saved.getValue().getModule());
+        assertEquals(1, saved.getValue().getAttempts());
+        assertTrue(saved.getValue().isOpen());
+    }
+
+    @Test
+    void beiDownAndThenAleDownKeepsTheEventAsDraftWithoutTouchingBeiAgain() {
+        doThrow(down("MS05")).when(brigade).pushState(any(EventStatePayload.class));
+        when(alerts.createAlert(any(AlertCommand.class), any(AlertActor.class))).thenThrow(down("MS03"));
 
         SchedulingOutcome outcome = service.schedule(event, scope, roles, actor("coord-1"));
 
         assertFalse(outcome.scheduled());
         assertEquals("SAVED_AS_DRAFT", outcome.warnings().get(0).code());
-        assertTrue(outcome.warnings().get(0).message().contains("MS05") || outcome.warnings().get(0).message().contains("BEI"));
-        assertTrue(outcome.alerts().isEmpty());
+        // BEI never accepted the Scheduled state, so no Draft state is sent to it.
+        verify(brigade, times(1)).pushState(any(EventStatePayload.class));
         ArgumentCaptor<EventStatePayload> chi = ArgumentCaptor.forClass(EventStatePayload.class);
         verify(checkIn, times(2)).pushState(chi.capture());
         assertEquals(EventStatus.DRAFT, chi.getAllValues().get(1).status());
-        verify(alerts, never()).createAlert(any(AlertCommand.class), any(AlertActor.class));
         verify(stateService, never()).transition(any(), any(), anyString(), any());
     }
 
@@ -228,7 +249,7 @@ class EventLifecycleServiceTest {
 
     @Test
     void aFailingUndoDoesNotBreakTheOutcome() {
-        doThrow(down("MS05")).when(brigade).pushState(any(EventStatePayload.class));
+        when(alerts.createAlert(any(AlertCommand.class), any(AlertActor.class))).thenThrow(down("MS03"));
         doThrow(down("MS04")).when(checkIn).pushState(
                 org.mockito.ArgumentMatchers.argThat(payload -> payload != null && payload.status() == EventStatus.DRAFT));
 
@@ -389,6 +410,47 @@ class EventLifecycleServiceTest {
 
         assertEquals(3, row.getAttempts());
         assertTrue(row.isOpen());
+    }
+
+    @Test
+    void retrySendsTheScheduledStateToBeiWhileTheEventIsStillScheduled() {
+        EventEntity waiting = scheduledEvent(START.plusSeconds(3600));
+        when(events.findById(waiting.getId())).thenReturn(Optional.of(waiting));
+        EventStartFailureEntity row = openFailure(waiting, ExternalModule.BEI, 1);
+
+        assertEquals(1, service.retryPendingStartCalls());
+
+        ArgumentCaptor<EventStatePayload> sent = ArgumentCaptor.forClass(EventStatePayload.class);
+        verify(brigade).pushState(sent.capture());
+        assertEquals(EventStatus.SCHEDULED, sent.getValue().status());
+        verify(checkIn, never()).pushState(any());
+        assertEquals(NOW, row.getResolvedAt());
+    }
+
+    @Test
+    void retryKeepsTheScheduledCallOpenWhileBeiDoesNotAnswer() {
+        EventEntity waiting = scheduledEvent(START.plusSeconds(3600));
+        when(events.findById(waiting.getId())).thenReturn(Optional.of(waiting));
+        EventStartFailureEntity row = openFailure(waiting, ExternalModule.BEI, 1);
+        doThrow(down("MS05")).when(brigade).pushState(any());
+
+        assertEquals(0, service.retryPendingStartCalls());
+
+        assertEquals(2, row.getAttempts());
+        assertTrue(row.isOpen());
+    }
+
+    @Test
+    void retryClosesTheScheduledCallWithoutCallingWhenTheEventWentBackToDraft() {
+        EventEntity draft = scheduledEvent(START.plusSeconds(3600));
+        draft.setStatus(EventStatus.DRAFT);
+        when(events.findById(draft.getId())).thenReturn(Optional.of(draft));
+        EventStartFailureEntity row = openFailure(draft, ExternalModule.BEI, 1);
+
+        assertEquals(1, service.retryPendingStartCalls());
+
+        assertEquals(NOW, row.getResolvedAt());
+        verify(brigade, never()).pushState(any());
     }
 
     @Test

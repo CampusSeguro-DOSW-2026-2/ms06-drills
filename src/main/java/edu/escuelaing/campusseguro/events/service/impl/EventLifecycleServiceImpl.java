@@ -119,11 +119,15 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
 
         checkIn.pushState(scheduled);
 
+        // BEI does not stop the scheduling: if it does not answer, the event is scheduled anyway and the
+        // call is saved to be repeated. The brigadiers may learn about the event late.
+        boolean brigadeTold = true;
         try {
             brigade.pushState(scheduled);
         } catch (ExternalServiceUnavailableException ex) {
-            bestEffort(() -> checkIn.pushState(draft));
-            return stayDraft("BEI");
+            log.warn("BEI did not answer when event {} was scheduled: it will be retried", event.getId());
+            saveFailure(event.getId(), ExternalModule.BEI, ex);
+            brigadeTold = false;
         }
 
         List<EventAlertEntity> links = new ArrayList<>();
@@ -134,14 +138,20 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
             links.forEach(link -> bestEffort(
                     () -> alerts.archive(link.getAlertId(), AlertActor.from(actor))));
             bestEffort(() -> checkIn.pushState(draft));
-            bestEffort(() -> brigade.pushState(draft));
+            if (brigadeTold) {
+                bestEffort(() -> brigade.pushState(draft));
+            } else {
+                // The event stays Draft, so there is nothing left to send to BEI.
+                closeFailure(event.getId(), ExternalModule.BEI);
+            }
             return stayDraft("ALE");
         }
 
         List<EventAlertEntity> saved = alertLinks.saveAll(links);
         stateService.transition(event.getId(), EventStatus.SCHEDULED, actor.auditId(),
                 "Scheduled with all its data");
-        return new SchedulingOutcome(true, List.of(), saved);
+        List<EventWarning> warnings = brigadeTold ? List.of() : List.of(brigadiersPending());
+        return new SchedulingOutcome(true, warnings, saved);
     }
 
     @Override
@@ -290,6 +300,12 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
             return false;
         }
         EventEntity event = events.findById(failure.getEventId()).orElse(null);
+        if (event != null && event.getStatus() == EventStatus.SCHEDULED && failure.getModule() == ExternalModule.BEI) {
+            // BEI did not answer when the event was scheduled: send it the Scheduled state now.
+            EventStatePayload scheduled = payload(event, EventStatus.SCHEDULED, scopeOf(event.getId()), rolesOf(event.getId()));
+            attempt(event.getId(), ExternalModule.BEI, scheduled, automaticActor(event));
+            return failures.findById(failureId).map(row -> !row.isOpen()).orElse(false);
+        }
         if (event == null || event.getStatus() != EventStatus.IN_PROGRESS) {
             failure.setResolvedAt(clock.instant());
             failures.save(failure);
@@ -402,6 +418,13 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
         return new EventStatePayload(
                 event.getId(), event.getName(), event.isSimulacro(), status,
                 event.getScheduledStart(), event.getEndedAt(), scope, roles);
+    }
+
+    /** The event was scheduled but BEI has not been told yet. */
+    private EventWarning brigadiersPending() {
+        return new EventWarning(
+                "BRIGADIERS_PENDING",
+                "The event was scheduled, but BEI is unavailable. The system keeps trying; the brigadiers may be told late.");
     }
 
     private SchedulingOutcome stayDraft(String service) {
