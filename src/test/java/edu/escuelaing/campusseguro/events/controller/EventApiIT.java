@@ -2,6 +2,7 @@ package edu.escuelaing.campusseguro.events.controller;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -226,23 +227,28 @@ class EventApiIT extends PostgresIntegrationTest {
 
         mvc.perform(get("/api/v1/eventos").param("title", "searchable quake").with(as("AUDITOR")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalElements").value(1))
-                .andExpect(jsonPath("$.content[0].name").value("Searchable Quake Event"))
-                .andExpect(jsonPath("$.content[0].status").value("DRAFT"));
+                .andExpect(jsonPath("$.total_elementos").value(1))
+                .andExpect(jsonPath("$.total_paginas").value(1))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.contenido[0].name").value("Searchable Quake Event"))
+                .andExpect(jsonPath("$.contenido[0].status").value("DRAFT"))
+                .andExpect(jsonPath("$.content").doesNotExist())
+                .andExpect(jsonPath("$.totalElements").doesNotExist());
 
         mvc.perform(get("/api/v1/eventos").param("title", "searchable").param("status", "IN_PROGRESS")
                         .with(as("COORDINADOR")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalElements").value(1))
-                .andExpect(jsonPath("$.content[0].name").value("Searchable Fire Event"));
+                .andExpect(jsonPath("$.total_elementos").value(1))
+                .andExpect(jsonPath("$.contenido[0].name").value("Searchable Fire Event"));
     }
 
     @Test
     void aSearchWithoutResultsIsAnEmptyPage() throws Exception {
         mvc.perform(get("/api/v1/eventos").param("title", "no-such-event-xyz").with(as("ADMIN")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content").isEmpty())
-                .andExpect(jsonPath("$.totalElements").value(0));
+                .andExpect(jsonPath("$.contenido").isEmpty())
+                .andExpect(jsonPath("$.total_elementos").value(0))
+                .andExpect(jsonPath("$.total_paginas").value(0));
     }
 
     @Test
@@ -368,5 +374,31 @@ class EventApiIT extends PostgresIntegrationTest {
                 .andExpect(status().isUnauthorized());
         mvc.perform(patch("/api/v1/eventos/" + UUID.randomUUID() + "/finalizar").with(as("COORDINADOR")))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void aRequestWithAnOriginIsNotRejectedByCors() throws Exception {
+        // The API Gateway answers CORS. If MS06 also checked the Origin, the deployed frontend would get 403.
+        mvc.perform(get("/api/v1/eventos")
+                        .header("Origin", "https://campusseguroftest.z41.web.core.windows.net")
+                        .with(as("AUDITOR")))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void anUnknownPathAnswersTheStandardErrorFormat() throws Exception {
+        mvc.perform(get("/api/v1/no-such-path").with(as("COORDINADOR")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
+                .andExpect(jsonPath("$.path").value("/api/v1/no-such-path"));
+    }
+
+    @Test
+    void aWrongMethodAnswersTheStandardErrorFormat() throws Exception {
+        mvc.perform(delete("/api/v1/eventos").with(as("COORDINADOR")))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.status").value(405))
+                .andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"));
     }
 }

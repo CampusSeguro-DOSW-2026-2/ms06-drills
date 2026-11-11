@@ -66,6 +66,24 @@ public enum ErrorCode {
         return status;
     }
 
+    /**
+     * Maps an HTTP status to its error code (used for errors that do not come from a business rule).
+     * An unknown 4xx status is reported as a validation error and any 5xx as an internal error.
+     */
+    public static ErrorCode fromStatus(int httpStatus) {
+        return switch (httpStatus) {
+            case 400 -> VALIDATION_ERROR;
+            case 401 -> UNAUTHORIZED;
+            case 403 -> FORBIDDEN;
+            case 404 -> RESOURCE_NOT_FOUND;
+            case 405 -> METHOD_NOT_ALLOWED;
+            case 409 -> CONFLICT;
+            case 415 -> UNSUPPORTED_MEDIA_TYPE;
+            case 503 -> EXTERNAL_SERVICE_UNAVAILABLE;
+            default -> httpStatus >= 500 ? INTERNAL_ERROR : VALIDATION_ERROR;
+        };
+    }
+
     public String defaultMessage() {
         return defaultMessage;
     }
