@@ -6,9 +6,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -25,25 +22,26 @@ class ApiErrorControllerTest {
 
     @BeforeEach
     void setUp() {
-        Clock clock = Clock.fixed(Instant.parse("2026-11-10T12:00:00Z"), ZoneOffset.UTC);
-        mockMvc = MockMvcBuilders.standaloneSetup(new ApiErrorController(clock)).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(new ApiErrorController()).build();
     }
 
     @Test
-    void usesTheStatusAndThePathOfTheFailedRequest() throws Exception {
-        mockMvc.perform(get("/error").requestAttr(STATUS, 404).requestAttr(URI, "/api/v1/missing"))
+    void usesTheStatusAndTheCorrelationIdOfTheFailedRequest() throws Exception {
+        mockMvc.perform(get("/error").requestAttr(STATUS, 404).requestAttr(URI, "/api/v1/missing")
+                        .header("X-Correlation-ID", "11111111-1111-4111-8111-111111111111"))
                 .andExpect(status().isNotFound())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.status").value(404))
-                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"))
-                .andExpect(jsonPath("$.path").value("/api/v1/missing"));
+                .andExpect(jsonPath("$.codigo").value("NO_ENCONTRADO"))
+                .andExpect(jsonPath("$.errores").isEmpty())
+                .andExpect(jsonPath("$.correlation_id").value("11111111-1111-4111-8111-111111111111"));
     }
 
     @Test
     void answersAnInternalErrorWhenThereIsNoStatus() throws Exception {
         mockMvc.perform(get("/error"))
                 .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"));
+                .andExpect(jsonPath("$.codigo").value("ERROR_INTERNO"));
     }
 
     @Test

@@ -10,9 +10,6 @@ import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validation;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,8 +40,9 @@ import org.springframework.web.context.request.ServletWebRequest;
 
 class GlobalExceptionHandlerTest {
 
-    private final Clock clock = Clock.fixed(Instant.parse("2026-11-07T12:00:00Z"), ZoneOffset.UTC);
-    private final GlobalExceptionHandler handler = new GlobalExceptionHandler(clock);
+    private static final String CORRELATION = "11111111-1111-4111-8111-111111111111";
+
+    private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
     private MockMvc mockMvc;
 
     record Body(@NotBlank String name) {
@@ -105,99 +103,109 @@ class GlobalExceptionHandlerTest {
 
     @Test
     void invalidBodyAnswers400WithTheFieldDetail() throws Exception {
-        mockMvc.perform(post("/t/valid").contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"\"}"))
+        mockMvc.perform(post("/t/valid").contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"\"}")
+                        .header("X-Correlation-ID", CORRELATION))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-                .andExpect(jsonPath("$.path").value("/t/valid"))
-                .andExpect(jsonPath("$.details[0].field").value("name"));
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.codigo").value("VALIDACION"))
+                .andExpect(jsonPath("$.mensaje").isNotEmpty())
+                .andExpect(jsonPath("$.errores[0].campo").value("name"))
+                .andExpect(jsonPath("$.errores[0].mensaje").isNotEmpty())
+                .andExpect(jsonPath("$.correlation_id").value(CORRELATION))
+                // The old fields must be gone: the Gateway rejects any other contract.
+                .andExpect(jsonPath("$.timestamp").doesNotExist())
+                .andExpect(jsonPath("$.path").doesNotExist())
+                .andExpect(jsonPath("$.code").doesNotExist())
+                .andExpect(jsonPath("$.message").doesNotExist())
+                .andExpect(jsonPath("$.details").doesNotExist());
     }
 
     @Test
     void malformedBodyAnswers400() throws Exception {
         mockMvc.perform(post("/t/valid").contentType(MediaType.APPLICATION_JSON).content("{bad"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+                .andExpect(jsonPath("$.codigo").value("VALIDACION"));
     }
 
     @Test
     void wrongParameterTypeAnswers400WithTheParameterName() throws Exception {
         mockMvc.perform(get("/t/int").param("n", "abc"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-                .andExpect(jsonPath("$.details[0].field").value("n"));
+                .andExpect(jsonPath("$.codigo").value("VALIDACION"))
+                .andExpect(jsonPath("$.errores[0].campo").value("n"));
     }
 
     @Test
     void constraintViolationAnswers400WithDetails() throws Exception {
         mockMvc.perform(get("/t/violation"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-                .andExpect(jsonPath("$.details[0].field").value("name"));
+                .andExpect(jsonPath("$.codigo").value("VALIDACION"))
+                .andExpect(jsonPath("$.errores[0].campo").value("name"));
     }
 
     @Test
     void accessDeniedAnswers403() throws Exception {
         mockMvc.perform(get("/t/denied"))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+                .andExpect(jsonPath("$.codigo").value("PROHIBIDO"));
     }
 
     @Test
     void authenticationErrorAnswers401() throws Exception {
         mockMvc.perform(get("/t/unauth"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+                .andExpect(jsonPath("$.codigo").value("NO_AUTENTICADO"));
     }
 
     @Test
     void optimisticLockAnswers409() throws Exception {
         mockMvc.perform(get("/t/lock"))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("CONCURRENT_MODIFICATION"));
+                .andExpect(jsonPath("$.codigo").value("MODIFICACION_CONCURRENTE"));
     }
 
     @Test
     void dataIntegrityAnswers409() throws Exception {
         mockMvc.perform(get("/t/integrity"))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("CONFLICT"));
+                .andExpect(jsonPath("$.codigo").value("CONFLICTO"));
     }
 
     @Test
     void unexpectedErrorAnswers500WithoutLeakingTheMessage() throws Exception {
         mockMvc.perform(get("/t/boom"))
                 .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
-                .andExpect(jsonPath("$.message").value(ErrorCode.INTERNAL_ERROR.defaultMessage()));
+                .andExpect(jsonPath("$.codigo").value("ERROR_INTERNO"))
+                .andExpect(jsonPath("$.mensaje").value(ErrorCode.INTERNAL_ERROR.defaultMessage()));
     }
 
     @Test
     void wrongMethodAnswers405() throws Exception {
         mockMvc.perform(post("/t/denied"))
                 .andExpect(status().isMethodNotAllowed())
-                .andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"));
+                .andExpect(jsonPath("$.codigo").value("METODO_NO_PERMITIDO"));
     }
 
     @Test
     void wrongContentTypeAnswers415() throws Exception {
         mockMvc.perform(post("/t/valid").contentType(MediaType.TEXT_PLAIN).content("x"))
                 .andExpect(status().isUnsupportedMediaType())
-                .andExpect(jsonPath("$.code").value("UNSUPPORTED_MEDIA_TYPE"));
+                .andExpect(jsonPath("$.codigo").value("TIPO_NO_SOPORTADO"));
     }
 
     @Test
     void genericStatusesMapToTheirErrorCode() {
         Map<Integer, String> expected = Map.of(
-                400, "VALIDATION_ERROR",
-                401, "UNAUTHORIZED",
-                403, "FORBIDDEN",
-                404, "RESOURCE_NOT_FOUND",
-                405, "METHOD_NOT_ALLOWED",
-                409, "CONFLICT",
-                415, "UNSUPPORTED_MEDIA_TYPE",
-                503, "EXTERNAL_SERVICE_UNAVAILABLE",
-                500, "INTERNAL_ERROR",
-                418, "VALIDATION_ERROR");
+                400, "VALIDACION",
+                401, "NO_AUTENTICADO",
+                403, "PROHIBIDO",
+                404, "NO_ENCONTRADO",
+                405, "METODO_NO_PERMITIDO",
+                409, "CONFLICTO",
+                415, "TIPO_NO_SOPORTADO",
+                503, "SERVICIO_EXTERNO_NO_DISPONIBLE",
+                500, "ERROR_INTERNO",
+                418, "VALIDACION");
 
         expected.forEach((status, code) -> {
             ResponseEntity<Object> response = handler.handleExceptionInternal(
@@ -208,7 +216,7 @@ class GlobalExceptionHandlerTest {
                     new ServletWebRequest(new MockHttpServletRequest("GET", "/x")));
 
             assertEquals(status, response.getStatusCode().value());
-            assertEquals(code, ((ErrorResponse) response.getBody()).code(), "status " + status);
+            assertEquals(code, ((ErrorResponse) response.getBody()).codigo(), "status " + status);
         });
     }
 
@@ -220,6 +228,6 @@ class GlobalExceptionHandlerTest {
                 new OptimisticLockingFailureException("conflict"), request);
 
         assertEquals(409, response.getStatusCode().value());
-        assertEquals("CONCURRENT_MODIFICATION", ((ErrorResponse) response.getBody()).code());
+        assertEquals("MODIFICACION_CONCURRENTE", ((ErrorResponse) response.getBody()).codigo());
     }
 }

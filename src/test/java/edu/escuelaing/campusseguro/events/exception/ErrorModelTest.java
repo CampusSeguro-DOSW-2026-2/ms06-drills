@@ -4,26 +4,23 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 
-
-/**
- * Class that test the ErrorModel file
- * ErrorModelTest
- */
-
+/** Tests the error catalog and the error body (API standards, sections 7.1 and 7.2). */
 class ErrorModelTest {
 
-    private final Instant now = Instant.parse("2026-11-07T12:00:00Z");
-
     @Test
-    void everyCodeHasAStatusAndAMessage() {
+    void everyCodeHasAStatusACodigoAndAMessage() {
+        Set<String> seen = new HashSet<>();
         for (ErrorCode code : ErrorCode.values()) {
             assertFalse(code.defaultMessage().isBlank(), code.name());
             assertTrue(code.status().isError(), code.name());
+            assertTrue(code.codigo().matches("[A-Z_]+"), code.name());
+            assertTrue(seen.add(code.codigo()), "repeated codigo " + code.codigo());
         }
     }
 
@@ -40,26 +37,34 @@ class ErrorModelTest {
     }
 
     @Test
-    void ofBuildsTheResponseFromTheCode() {
-        ErrorResponse response = ErrorResponse.of(
-                now,
-                ErrorCode.VALIDATION_ERROR,
-                "msg",
-                "/api/v1/eventos",
-                List.of(new ErrorResponse.Detail("name", "must not be blank")));
-
-        assertEquals(now, response.timestamp());
-        assertEquals(400, response.status());
-        assertEquals("VALIDATION_ERROR", response.code());
-        assertEquals("msg", response.message());
-        assertEquals("/api/v1/eventos", response.path());
-        assertEquals(1, response.details().size());
+    void theStandardCodesUseTheCatalogNames() {
+        assertEquals("VALIDACION", ErrorCode.VALIDATION_ERROR.codigo());
+        assertEquals("NO_AUTENTICADO", ErrorCode.UNAUTHORIZED.codigo());
+        assertEquals("PROHIBIDO", ErrorCode.FORBIDDEN.codigo());
+        assertEquals("NO_ENCONTRADO", ErrorCode.RESOURCE_NOT_FOUND.codigo());
+        assertEquals("CONFLICTO", ErrorCode.CONFLICT.codigo());
     }
 
     @Test
-    void nullDetailsBecomeAnEmptyList() {
-        ErrorResponse response = new ErrorResponse(now, 500, "INTERNAL_ERROR", "m", "/p", null);
+    void ofBuildsTheResponseFromTheCode() {
+        ErrorResponse response = ErrorResponse.of(
+                ErrorCode.VALIDATION_ERROR,
+                "msg",
+                List.of(new ErrorResponse.Detail("name", "must not be blank")),
+                "corr-1");
 
-        assertTrue(response.details().isEmpty());
+        assertEquals(400, response.status());
+        assertEquals("VALIDACION", response.codigo());
+        assertEquals("msg", response.mensaje());
+        assertEquals("corr-1", response.correlationId());
+        assertEquals(1, response.errores().size());
+        assertEquals("name", response.errores().get(0).campo());
+    }
+
+    @Test
+    void nullErrorsBecomeAnEmptyList() {
+        ErrorResponse response = new ErrorResponse(500, "ERROR_INTERNO", "m", null, "c");
+
+        assertTrue(response.errores().isEmpty());
     }
 }

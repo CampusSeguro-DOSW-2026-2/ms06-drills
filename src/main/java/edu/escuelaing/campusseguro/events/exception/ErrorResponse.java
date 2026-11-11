@@ -1,40 +1,35 @@
 package edu.escuelaing.campusseguro.events.exception;
 
-import java.time.Instant;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 /**
- * Record that expose the required information of an error
+ * Body of every error answer. It has exactly these five fields (API standards, section 7.1):
+ * {@code status}, {@code codigo}, {@code mensaje}, {@code errores} and {@code correlation_id}.
+ *
+ * @param status        HTTP status
+ * @param codigo        stable code from the catalog (for example {@code NO_ENCONTRADO})
+ * @param mensaje       explanation for the user
+ * @param errores       one item per invalid field; empty when the error has no field
+ * @param correlationId value of the {@code X-Correlation-ID} header of the request
  */
-
 public record ErrorResponse(
-        Instant timestamp,
         int status,
-        String code,
-        String message,
-        String path,
-        List<Detail> details) {
+        String codigo,
+        String mensaje,
+        List<Detail> errores,
+        @JsonProperty("correlation_id") String correlationId) {
 
     public ErrorResponse {
-        details = details == null ? List.of() : List.copyOf(details);
+        errores = errores == null ? List.of() : List.copyOf(errores);
     }
 
-    public record Detail(String field, String message) {
+    /** One invalid field and why. */
+    public record Detail(String campo, String mensaje) {
     }
 
-    public static ErrorResponse of(
-            Instant timestamp,
-            ErrorCode code,
-            String message,
-            String path,
-            List<Detail> details) {
-
-        return new ErrorResponse(
-                timestamp,
-                code.status().value(),
-                code.name(),
-                message,
-                path,
-                details);
+    /** Builds the response from a catalog code. */
+    public static ErrorResponse of(ErrorCode code, String message, List<Detail> errors, String correlationId) {
+        return new ErrorResponse(code.status().value(), code.codigo(), message, errors, correlationId);
     }
 }

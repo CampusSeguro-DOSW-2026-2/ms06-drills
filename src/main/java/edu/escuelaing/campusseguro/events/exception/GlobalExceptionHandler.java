@@ -1,8 +1,8 @@
 package edu.escuelaing.campusseguro.events.exception;
 
+import edu.escuelaing.campusseguro.events.client.CorrelationIds;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
-import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
@@ -25,7 +25,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /**
- * Turns any exception into an {@link ErrorResponse} with an {@link ErrorCode}.
+ * Turns any exception into an {@link ErrorResponse} (API standards, section 7.1) with an {@link ErrorCode}.
  * Domain exceptions are added here together with the story that uses them.
  */
 @RestControllerAdvice
@@ -33,13 +33,6 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final Logger log =
             LoggerFactory.getLogger(GlobalExceptionHandler.class);
-
-    private final Clock clock;
-
-    /** @param clock application clock, for the timestamp of each error */
-    public GlobalExceptionHandler(Clock clock) {
-        this.clock = clock;
-    }
 
     /** A business rule was broken: answers with the status and code of the exception. */
     @ExceptionHandler(BusinessException.class)
@@ -50,7 +43,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return respond(
                 ex.code(),
                 ex.getMessage(),
-                request.getRequestURI(),
+                CorrelationIds.of(request),
                 List.of());
     }
 
@@ -63,7 +56,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return respond(
                 ex.code(),
                 ex.getMessage(),
-                request.getRequestURI(),
+                CorrelationIds.of(request),
                 List.of(new ErrorResponse.Detail(ex.field(), ex.getMessage())));
     }
 
@@ -76,8 +69,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return respond(
                 ex.code(),
                 ex.getMessage(),
-                request.getRequestURI(),
-                List.of(new ErrorResponse.Detail(ex.field(), "Unknown or inactive values: " + ex.invalidIds())));
+                CorrelationIds.of(request),
+                List.of(new ErrorResponse.Detail(ex.field(), "Valores desconocidos o inactivos: " + ex.invalidIds())));
     }
 
     /** Two users changed the same record at the same time (optimistic locking): 409. */
@@ -89,7 +82,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return respond(
                 ErrorCode.CONCURRENT_MODIFICATION,
                 ErrorCode.CONCURRENT_MODIFICATION.defaultMessage(),
-                request.getRequestURI(),
+                CorrelationIds.of(request),
                 List.of());
     }
 
@@ -104,7 +97,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return respond(
                 ErrorCode.CONFLICT,
                 ErrorCode.CONFLICT.defaultMessage(),
-                request.getRequestURI(),
+                CorrelationIds.of(request),
                 List.of());
     }
 
@@ -124,7 +117,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return respond(
                 ErrorCode.VALIDATION_ERROR,
                 ErrorCode.VALIDATION_ERROR.defaultMessage(),
-                request.getRequestURI(),
+                CorrelationIds.of(request),
                 details);
     }
 
@@ -137,7 +130,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return respond(
                 ErrorCode.FORBIDDEN,
                 ErrorCode.FORBIDDEN.defaultMessage(),
-                request.getRequestURI(),
+                CorrelationIds.of(request),
                 List.of());
     }
 
@@ -150,7 +143,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return respond(
                 ErrorCode.UNAUTHORIZED,
                 ErrorCode.UNAUTHORIZED.defaultMessage(),
-                request.getRequestURI(),
+                CorrelationIds.of(request),
                 List.of());
     }
 
@@ -165,7 +158,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return respond(
                 ErrorCode.INTERNAL_ERROR,
                 ErrorCode.INTERNAL_ERROR.defaultMessage(),
-                request.getRequestURI(),
+                CorrelationIds.of(request),
                 List.of());
     }
 
@@ -194,7 +187,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return respond(
                 ErrorCode.VALIDATION_ERROR,
                 ErrorCode.VALIDATION_ERROR.defaultMessage(),
-                pathOf(request),
+                correlationOf(request),
                 details);
     }
 
@@ -208,8 +201,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
         return respond(
                 ErrorCode.VALIDATION_ERROR,
-                "The request body is missing, malformed, or contains invalid values",
-                pathOf(request),
+                "El cuerpo de la solicitud falta, está mal formado o tiene valores no válidos",
+                correlationOf(request),
                 List.of());
     }
 
@@ -227,12 +220,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                         : ex.getPropertyName();
 
         List<ErrorResponse.Detail> details = List.of(
-                new ErrorResponse.Detail(field, "The supplied value is invalid"));
+                new ErrorResponse.Detail(field, "El valor enviado no es válido"));
 
         return respond(
                 ErrorCode.VALIDATION_ERROR,
                 ErrorCode.VALIDATION_ERROR.defaultMessage(),
-                pathOf(request),
+                correlationOf(request),
                 details);
     }
 
@@ -248,12 +241,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ErrorCode code = codeFor(statusCode);
 
         ErrorResponse response = new ErrorResponse(
-                clock.instant(),
                 statusCode.value(),
-                code.name(),
+                code.codigo(),
                 code.defaultMessage(),
-                pathOf(request),
-                List.of());
+                List.of(),
+                correlationOf(request));
 
         return ResponseEntity.status(statusCode)
                 .headers(headers)
@@ -265,24 +257,20 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return ErrorCode.fromStatus(status.value());
     }
 
-    private String pathOf(WebRequest request) {
+    /** Correlation id of the request, to repeat it in the error body. */
+    private String correlationOf(WebRequest request) {
         return request instanceof ServletWebRequest servletRequest
-                ? servletRequest.getRequest().getRequestURI()
-                : "";
+                ? CorrelationIds.of(servletRequest.getRequest())
+                : CorrelationIds.current();
     }
 
     private ResponseEntity<Object> respond(
             ErrorCode code,
             String message,
-            String path,
-            List<ErrorResponse.Detail> details) {
+            String correlationId,
+            List<ErrorResponse.Detail> errors) {
 
-        ErrorResponse response = ErrorResponse.of(
-                clock.instant(),
-                code,
-                message,
-                path,
-                details);
+        ErrorResponse response = ErrorResponse.of(code, message, errors, correlationId);
 
         return ResponseEntity.status(code.status()).body(response);
     }
