@@ -79,6 +79,8 @@ app:
     service-token: ${SERVICE_TOKEN:}
   security:
     roles-claim: ${JWT_ROLES_CLAIM:roles}
+    # Only for the local/test JWT; behind the Gateway the permissions come in X-User-Permission.
+    permissions-claim: ${JWT_PERMISSIONS_CLAIM:permissions}
 
 # JWT validation outside the local profile (waiting for MS01 data).
 # Set it with properties or environment variables, for example:

@@ -138,10 +138,12 @@ public class EventUpdateServiceImpl implements EventUpdateService {
             boolean changed,
             List<EventWarning> warnings,
             String actor,
-            Set<Role> actorRoles) {
+            Set<Role> actorRoles,
+            Set<String> actorPermissions) {
 
+        /** Actor for scheduling and alerts, with the same roles and permissions as the request. */
         AccessActor accessActor() {
-            return new AccessActor(actor, actorRoles);
+            return new AccessActor(actor, actorRoles, actorPermissions);
         }
     }
 
@@ -180,7 +182,8 @@ public class EventUpdateServiceImpl implements EventUpdateService {
                 hasChanges(event, request, types, oldScope, scope, oldRoles, roles),
                 warnings,
                 actor.auditId(),
-                actor.roles());
+                actor.roles(),
+                actor.permissions());
         if (edit.changed()) {
             audit.record(AuditRecordType.MODIFICATION, "EVENT_UPDATED", actor.auditId(), event, "Event edited");
         }
