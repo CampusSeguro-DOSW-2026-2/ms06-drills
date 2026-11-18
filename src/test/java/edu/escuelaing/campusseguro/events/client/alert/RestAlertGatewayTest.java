@@ -43,7 +43,8 @@ class RestAlertGatewayTest extends WireMockTestBase {
                 ALERTS,
                 RESCHEDULE,
                 ARCHIVE,
-                ACTIVATE);
+                ACTIVATE,
+                "ms03:alert:manage_drill");
     }
 
     private AlertCommand command(boolean drill) {
@@ -74,6 +75,8 @@ class RestAlertGatewayTest extends WireMockTestBase {
                 .withHeader("X-Service-Key", equalTo("test-service-key"))
                 .withHeader("X-User-Id", equalTo(ACTOR.userId()))
                 .withHeader("X-User-Role", equalTo("ESTUDIANTE"))
+                // Without a request of that user, the system user permissions are sent
+                .withHeader("X-User-Permission", equalTo("ms03:alert:manage_drill"))
                 .withHeader("X-Correlation-ID", containing("-"))
                 .withRequestBody(containing("\"types\":[\"OTHER\"]"))
                 .withRequestBody(containing("\"purpose\":\"GENERAL\""))

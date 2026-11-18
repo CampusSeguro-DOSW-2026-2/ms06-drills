@@ -5,6 +5,8 @@ public final class IdentityHeaders {
 
     public static final String USER_ID = "X-User-Id";
     public static final String USER_ROLE = "X-User-Role";
+    /** Permissions of the user, comma separated; the Gateway requires it with X-User-Id and X-User-Role. */
+    public static final String USER_PERMISSION = "X-User-Permission";
     public static final String SERVICE_NAME = "X-Service-Name";
     public static final String SERVICE_KEY = "X-Service-Key";
 

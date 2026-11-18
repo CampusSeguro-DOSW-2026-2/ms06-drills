@@ -9,6 +9,7 @@ import edu.escuelaing.campusseguro.events.exception.ExternalServiceUnavailableEx
 import edu.escuelaing.campusseguro.events.exception.InvalidReferenceException;
 import edu.escuelaing.campusseguro.events.security.IdentityHeaders;
 import edu.escuelaing.campusseguro.events.security.Role;
+import edu.escuelaing.campusseguro.events.security.UserPermissions;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -51,6 +52,7 @@ public class RestCampusGateway implements CampusGateway {
     private final String buildingPath;
     private final String zonePath;
     private final String routesPath;
+    private final String systemUserPermissions;
 
     public RestCampusGateway(
             RestClientFactory factory,
@@ -61,7 +63,9 @@ public class RestCampusGateway implements CampusGateway {
             @Value("${app.clients.ms02.building-path:/api/v1/buildings/{id}}") String buildingPath,
             @Value("${app.clients.ms02.zone-path:/api/v1/safe-zones/{id}}") String zonePath,
             @Value("${app.clients.ms02.routes-path:/api/v1/buildings/{id}/evacuation-routes}")
-                    String routesPath) {
+                    String routesPath,
+            @Value("${app.gateway.system-user-permissions:" + UserPermissions.DEFAULT_SYSTEM_PERMISSIONS + "}")
+                    String systemUserPermissions) {
         if (serviceKey == null || serviceKey.isBlank()) {
             throw new IllegalStateException("app.gateway.service-key is required (GATEWAY_SERVICE_KEY)");
         }
@@ -74,6 +78,7 @@ public class RestCampusGateway implements CampusGateway {
         this.buildingPath = buildingPath;
         this.zonePath = zonePath;
         this.routesPath = routesPath;
+        this.systemUserPermissions = systemUserPermissions;
     }
 
     @Override
@@ -168,6 +173,7 @@ public class RestCampusGateway implements CampusGateway {
         headers.set(IdentityHeaders.SERVICE_NAME, SERVICE_NAME);
         headers.set(IdentityHeaders.USER_ID, systemUserId);
         headers.set(IdentityHeaders.USER_ROLE, systemUserRole);
+        headers.set(IdentityHeaders.USER_PERMISSION, UserPermissions.forSystem(systemUserPermissions));
         headers.set(CorrelationIds.HEADER, CorrelationIds.current());
     }
 

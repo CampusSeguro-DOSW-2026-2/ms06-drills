@@ -44,6 +44,7 @@ services:
       GATEWAY_URL: ${GATEWAY_URL}
       GATEWAY_SERVICE_KEY: ${GATEWAY_SERVICE_KEY}
       GATEWAY_SYSTEM_USER_ID: ${GATEWAY_SYSTEM_USER_ID:-}
+      GATEWAY_SYSTEM_USER_PERMISSIONS: ${GATEWAY_SYSTEM_USER_PERMISSIONS:-}
       # Off at first: the calls to the other microservices are not integrated yet.
       SCHEDULING_ENABLED: ${SCHEDULING_ENABLED:-false}
     mem_limit: 768m
