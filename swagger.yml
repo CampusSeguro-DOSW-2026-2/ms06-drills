@@ -88,6 +88,21 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/EventTypeResponse"
+  /api/v1/tipos-alerta:
+    get:
+      tags:
+      - Alert types
+      summary: List the active and alert-eligible types for MS03
+      operationId: listAlertTypes
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AlertTypeResponse"
   /api/v1/eventos:
     get:
       tags:
@@ -351,6 +366,16 @@ components:
           type: string
         active:
           type: boolean
+    AlertTypeResponse:
+      type: object
+      description: Alert type of the MS06 catalog, replicated by MS03. SIMULACRO is never included.
+      properties:
+        code:
+          type: string
+          example: SISMO
+        name:
+          type: string
+          example: Sismo
     EventWarning:
       type: object
       properties:

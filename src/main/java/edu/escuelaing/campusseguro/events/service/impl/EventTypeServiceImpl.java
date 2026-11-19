@@ -1,5 +1,6 @@
 package edu.escuelaing.campusseguro.events.service.impl;
 
+import edu.escuelaing.campusseguro.events.dto.response.AlertTypeResponse;
 import edu.escuelaing.campusseguro.events.dto.response.EventTypeResponse;
 import edu.escuelaing.campusseguro.events.entity.EventTypeEntity;
 import edu.escuelaing.campusseguro.events.entity.enums.AuditRecordType;
@@ -29,6 +30,14 @@ public class EventTypeServiceImpl implements EventTypeService {
     @Transactional(readOnly = true)
     public List<EventTypeResponse> listActive() {
         return types.findByActiveTrueOrderByNameAsc().stream().map(EventTypeResponse::from).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<AlertTypeResponse> listAlertTypes() {
+        return types.findByAlertEligibleTrueAndActiveTrueOrderByNameAsc().stream()
+                .map(AlertTypeResponse::from)
+                .toList();
     }
 
     @Override

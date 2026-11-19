@@ -5,7 +5,7 @@ import edu.escuelaing.campusseguro.events.client.ScopeRef;
 import edu.escuelaing.campusseguro.events.client.alert.AlertActor;
 import edu.escuelaing.campusseguro.events.client.alert.AlertCommand;
 import edu.escuelaing.campusseguro.events.client.alert.AlertGateway;
-import edu.escuelaing.campusseguro.events.client.alert.AlertTypes;
+import edu.escuelaing.campusseguro.events.client.alert.AlertTypeCodes;
 import edu.escuelaing.campusseguro.events.client.brigade.BrigadeGateway;
 import edu.escuelaing.campusseguro.events.client.checkin.CheckInGateway;
 import edu.escuelaing.campusseguro.events.dto.response.EvaluationResponse;
@@ -220,7 +220,7 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
             EventAlertEntity link = createAlert(event, new AlertCommand(
                     event.getId(), EventAlertPurpose.FINISH, event.isSimulacro(),
                     FINISH_TITLE + event.getName(), FINISH_TEXT, scope, roles, null, true,
-                    AlertTypes.from(event.getTypes())), actor);
+                    AlertTypeCodes.from(event.getTypes())), actor);
             alertLinks.save(link);
         } catch (ExternalServiceUnavailableException ex) {
             warnings.add(new EventWarning("FINISH_ALERT_NOT_SENT",
@@ -406,7 +406,7 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
                 event.getId(), EventAlertPurpose.BRIGADISTS, event.isSimulacro(),
                 BRIGADIERS_TITLE + event.getName(), BRIGADIERS_TEXT,
                 scope, Set.of("BRIGADISTA"), null, true,
-                AlertTypes.from(event.getTypes()));
+                AlertTypeCodes.from(event.getTypes()));
     }
 
     /** Alert that tells participants the event started. It is scheduled for the start date. */
@@ -415,7 +415,7 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
                 event.getId(), EventAlertPurpose.GENERAL, event.isSimulacro(),
                 START_TITLE + event.getName(), START_TEXT,
                 scope, roles, event.getScheduledStart(), false,
-                AlertTypes.from(event.getTypes()));
+                AlertTypeCodes.from(event.getTypes()));
     }
 
     private EventStatePayload payload(EventEntity event, EventStatus status, List<ScopeRef> scope, Set<String> roles) {

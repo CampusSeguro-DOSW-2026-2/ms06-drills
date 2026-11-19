@@ -211,7 +211,7 @@ El esquema no usa Flyway: lo crea `database/schema.sql` en cada arranque (idempo
 
 | Entidad | Campos principales | Relaciones |
 |---------|-------------------|------------|
-| `event_types` | `id`, `code`, `name`, `active`, `created_by` | N:M con `events` (7 tipos predefinidos) |
+| `event_types` | `id`, `code`, `name`, `active`, `alert_eligible`, `created_by` | N:M con `events` (7 tipos predefinidos) |
 | `events` | `id`, `name`, `description`, `status`, `simulacro`, `scheduled_start`, `started_at`, `ended_at`, `created_by`, `version` | Entidad central |
 | `event_type_links` | `event_id`, `type_id` | Une `events` y `event_types` (N:M) |
 | `event_scope_items` | `id`, `event_id`, `scope_type`, `scope_ref_id` | N:1 con `events` |
@@ -260,7 +260,10 @@ OpenAPI openAPI() {
 | GET | `/eventos/{id}/panel` | Panel del evento en ejecución (rutas, check-in, incidentes) | Sí: cualquier usuario autenticado | 200, 401, 404, 409 |
 | PATCH | `/eventos/{id}/finalizar` | Finalizar un evento y evaluarlo | Sí: COORDINADOR, ORGANIZADOR | 200, 401, 403, 404, 409, 503 |
 | GET | `/tipos-evento` | Listar los tipos de evento activos | Sí: COORDINADOR, ORGANIZADOR, ADMIN, AUDITOR | 200, 401, 403 |
+| GET | `/tipos-alerta` | Listar los tipos de alerta activos y elegibles para MS03 (sin `SIMULACRO`) | Sí: COORDINADOR, ORGANIZADOR, ADMIN, AUDITOR | 200, 401, 403 |
 | POST | `/tipos-evento` | Crear un tipo de evento | Sí: COORDINADOR | 201, 400, 401, 403, 409 |
+
+> **Tipos de alerta:** `GET /api/v1/tipos-alerta` es el catálogo canónico que MS03 replica (`[{ "code": "SISMO", "name": "Sismo" }, ...]`, ordenado por nombre). Los tipos de alerta salen de `event_types` con `alert_eligible = true` y `active = true`; `SIMULACRO` **no** es un tipo de alerta y queda con `alert_eligible = false`. Al crear, editar, activar o finalizar un evento, MS06 envía a MS03 los códigos de este catálogo y, si no queda ninguno, envía `OTRO`. `OPERATIVA` es exclusiva de MS03 y nunca se envía desde MS06.
 
 **Ejemplo de petición**
 ```http

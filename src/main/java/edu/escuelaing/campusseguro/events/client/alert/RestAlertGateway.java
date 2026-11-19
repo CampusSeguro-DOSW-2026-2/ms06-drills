@@ -172,7 +172,7 @@ public class RestAlertGateway implements AlertGateway {
                 ? new Origin("SIMULATION", command.eventId())
                 : new Origin("MANUAL", null);
         List<String> types = command.alertTypes() == null || command.alertTypes().isEmpty()
-                ? List.of("OTHER")
+                ? List.of(AlertTypeCodes.OTHER_CODE)
                 : command.alertTypes();
         return new Body(
                 types,

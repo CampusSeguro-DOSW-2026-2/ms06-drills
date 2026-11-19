@@ -10,14 +10,18 @@
 
 -- Event type catalog. The code SIMULACRO makes an event a drill.
 CREATE TABLE IF NOT EXISTS event_types (
-    id          uuid         PRIMARY KEY,
-    code        varchar(40)  NOT NULL UNIQUE,
-    name        varchar(80)  NOT NULL UNIQUE,
-    active      boolean      NOT NULL,
-    created_by  varchar(64)  NOT NULL,
-    created_at  timestamptz  NOT NULL,
-    updated_at  timestamptz  NOT NULL
+    id             uuid         PRIMARY KEY,
+    code           varchar(40)  NOT NULL UNIQUE,
+    name           varchar(80)  NOT NULL UNIQUE,
+    active         boolean      NOT NULL,
+    alert_eligible boolean      NOT NULL DEFAULT true,
+    created_by     varchar(64)  NOT NULL,
+    created_at     timestamptz  NOT NULL,
+    updated_at     timestamptz  NOT NULL
 );
+
+-- Existing databases: add the column without breaking the idempotent startup.
+ALTER TABLE event_types ADD COLUMN IF NOT EXISTS alert_eligible boolean NOT NULL DEFAULT true;
 
 -- Event or drill.
 CREATE TABLE IF NOT EXISTS events (
@@ -159,3 +163,6 @@ INSERT INTO event_types (id, code, name, active, created_by, created_at, updated
     (gen_random_uuid(), 'FUGA_QUIMICA',  'Fuga de Sustancias Químicas',    true, 'system', now(), now()),
     (gen_random_uuid(), 'OTRO',          'Otro',                           true, 'system', now(), now())
 ON CONFLICT (code) DO NOTHING;
+
+-- A drill is not an alert type: keep SIMULACRO out of the catalog served to MS03.
+UPDATE event_types SET alert_eligible = false WHERE code = 'SIMULACRO';

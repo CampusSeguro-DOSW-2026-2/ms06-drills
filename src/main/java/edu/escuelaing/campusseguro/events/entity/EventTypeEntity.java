@@ -39,6 +39,13 @@ public class EventTypeEntity extends BaseEntity {
     @Column(name = "active", nullable = false)
     private boolean active;
 
+    /**
+     * If {@code true}, the type is part of the alert catalog served to MS03. The
+     * {@code SIMULACRO} type is not eligible: a drill is not an alert type.
+     */
+    @Column(name = "alert_eligible", nullable = false)
+    private boolean alertEligible = true;
+
     /** User who created the type ({@code system} for the predefined ones). */
     @Column(name = "created_by", nullable = false, length = 64)
     private String createdBy;
@@ -55,6 +62,10 @@ public class EventTypeEntity extends BaseEntity {
     public boolean isActive() { return active; }
 
     public void setActive(boolean active) { this.active = active; }
+
+    public boolean isAlertEligible() { return alertEligible; }
+
+    public void setAlertEligible(boolean alertEligible) { this.alertEligible = alertEligible; }
 
     public String getCreatedBy() { return createdBy; }
 

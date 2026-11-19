@@ -1,5 +1,6 @@
 package edu.escuelaing.campusseguro.events.service.impl;
 
+import edu.escuelaing.campusseguro.events.dto.response.AlertTypeResponse;
 import edu.escuelaing.campusseguro.events.dto.response.EventTypeResponse;
 import edu.escuelaing.campusseguro.events.entity.enums.AuditRecordType;
 import edu.escuelaing.campusseguro.events.service.AuditService;
@@ -45,6 +46,20 @@ class EventTypeServiceTest {
 
         assertEquals(1, result.size());
         assertEquals("SISMO", result.get(0).code());
+    }
+
+    @Test
+    void listsTheAlertEligibleActiveTypesWithCodeAndName() {
+        when(types.findByAlertEligibleTrueAndActiveTrueOrderByNameAsc())
+                .thenReturn(List.of(type("SISMO", "Sismo"), type("INCENDIO", "Incendio")));
+
+        List<AlertTypeResponse> result = service.listAlertTypes();
+
+        assertEquals(2, result.size());
+        assertEquals("SISMO", result.get(0).code());
+        assertEquals("Sismo", result.get(0).name());
+        assertEquals("INCENDIO", result.get(1).code());
+        assertEquals("Incendio", result.get(1).name());
     }
 
     @Test
