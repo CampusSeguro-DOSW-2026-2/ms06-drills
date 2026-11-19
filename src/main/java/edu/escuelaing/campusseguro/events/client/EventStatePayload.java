@@ -1,7 +1,6 @@
 package edu.escuelaing.campusseguro.events.client;
 
 import edu.escuelaing.campusseguro.events.entity.enums.EventStatus;
-import edu.escuelaing.campusseguro.events.security.Role;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
@@ -18,7 +17,7 @@ import java.util.UUID;
  * @param startDate    scheduled start (empty in draft)
  * @param endDate      real end (only when finished)
  * @param scope        buildings and zones of the event
- * @param invitedRoles roles invited to the event
+ * @param invitedRoles names of the roles invited to the event
  */
 public record EventStatePayload(
         UUID eventId,
@@ -28,5 +27,5 @@ public record EventStatePayload(
         Instant startDate,
         Instant endDate,
         List<ScopeRef> scope,
-        Set<Role> invitedRoles) {
+        Set<String> invitedRoles) {
 }

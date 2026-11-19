@@ -7,7 +7,6 @@ import edu.escuelaing.campusseguro.events.client.ScopeRef;
 import edu.escuelaing.campusseguro.events.entity.enums.ScopeType;
 import edu.escuelaing.campusseguro.events.exception.ExternalServiceUnavailableException;
 import edu.escuelaing.campusseguro.events.security.IdentityHeaders;
-import edu.escuelaing.campusseguro.events.security.Role;
 import edu.escuelaing.campusseguro.events.security.UserPermissions;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -124,7 +123,7 @@ public class RestAlertGateway implements AlertGateway {
         headers.set(IdentityHeaders.SERVICE_KEY, serviceKey);
         headers.set(CorrelationIds.HEADER, CorrelationIds.current());
         headers.set(IdentityHeaders.USER_ID, resolved.userId());
-        headers.set(IdentityHeaders.USER_ROLE, resolved.roles());
+        headers.set(IdentityHeaders.USER_ROLE, resolved.roleNames());
         headers.set(IdentityHeaders.USER_PERMISSION,
                 UserPermissions.forActor(resolved.userId(), systemUserPermissions));
     }
@@ -139,22 +138,17 @@ public class RestAlertGateway implements AlertGateway {
                     "No valid user identity to call MS03: use an event created by a user or "
                             + "configure GATEWAY_SYSTEM_USER_ID"));
         }
-        Set<Role> roles = actor == null || actor.roles().isEmpty() ? systemRoles() : actor.roles();
-        String roleList = roles.stream()
-                .map(Role::name)
-                .sorted()
-                .collect(Collectors.joining(","));
+        Set<String> roles = actor == null || actor.roleNames().isEmpty() ? systemRoleNames() : actor.roleNames();
+        String roleList = roles.stream().sorted().collect(Collectors.joining(","));
         return new ResolvedActor(userId, roleList);
     }
 
-    private Set<Role> systemRoles() {
-        Set<Role> roles = java.util.Arrays.stream(systemUserRole.split(","))
+    private Set<String> systemRoleNames() {
+        Set<String> roles = java.util.Arrays.stream(systemUserRole.split(","))
                 .map(String::strip)
                 .filter(value -> !value.isEmpty())
-                .map(Role::fromClaim)
-                .flatMap(java.util.Optional::stream)
                 .collect(Collectors.toSet());
-        return roles.isEmpty() ? Set.of(Role.ORGANIZADOR) : roles;
+        return roles.isEmpty() ? Set.of("ORGANIZADOR") : roles;
     }
 
     private boolean isUuid(String value) {
@@ -172,7 +166,7 @@ public class RestAlertGateway implements AlertGateway {
     private Body toBody(AlertCommand command) {
         List<ScopeBody> scopes = groupScopes(command.scope());
         List<RecipientBody> recipients = command.recipientRoles().stream()
-                .map(role -> new RecipientBody("ROLE", role.name()))
+                .map(role -> new RecipientBody("ROLE", role))
                 .toList();
         Origin origin = command.simulacro()
                 ? new Origin("SIMULATION", command.eventId())
@@ -205,7 +199,7 @@ public class RestAlertGateway implements AlertGateway {
                 .toList();
     }
 
-    record ResolvedActor(String userId, String roles) {
+    record ResolvedActor(String userId, String roleNames) {
     }
 
     record ScopeBody(String type, List<String> ids) {

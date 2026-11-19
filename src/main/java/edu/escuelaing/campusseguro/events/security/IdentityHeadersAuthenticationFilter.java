@@ -33,6 +33,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Profile("!local & !test")
 public class IdentityHeadersAuthenticationFilter extends OncePerRequestFilter {
 
+    private static final String ROLE_PREFIX = "ROLE_";
+
     private static final Pattern UUID = Pattern.compile(
             "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
             Pattern.CASE_INSENSITIVE);
@@ -68,10 +70,11 @@ public class IdentityHeadersAuthenticationFilter extends OncePerRequestFilter {
             Arrays.stream(roles.split(","))
                     .map(String::strip)
                     .filter(value -> !value.isEmpty())
-                    .map(Role::fromClaim)
-                    .flatMap(Optional::stream)
+                    .map(this::roleAuthority)
+                    .filter(Optional::isPresent)
+                    .map(Optional::get)
                     .distinct()
-                    .forEach(role -> authorities.add(new SimpleGrantedAuthority(role.authority())));
+                    .forEach(authority -> authorities.add(new SimpleGrantedAuthority(authority)));
         }
         List<String> codes = Arrays.stream(permissions.split(","))
                 .map(String::strip)
@@ -89,6 +92,16 @@ public class IdentityHeadersAuthenticationFilter extends OncePerRequestFilter {
         authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
         SecurityContextHolder.getContext().setAuthentication(authentication);
         filterChain.doFilter(request, response);
+    }
+
+    /** Authority of a role name: the official ones keep their prefix, the ones of MS01 travel as they are. */
+    private Optional<String> roleAuthority(String value) {
+        Optional<Role> known = Role.fromClaim(value);
+        if (known.isPresent()) {
+            return Optional.of(known.get().authority());
+        }
+        String normalized = RoleNames.normalize(value);
+        return RoleNames.hasStoredFormat(normalized) ? Optional.of(ROLE_PREFIX + normalized) : Optional.empty();
     }
 
     private void reject(HttpServletRequest request, HttpServletResponse response) throws IOException {

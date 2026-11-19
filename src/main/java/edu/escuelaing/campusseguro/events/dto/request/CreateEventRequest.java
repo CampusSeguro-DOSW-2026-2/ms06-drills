@@ -1,6 +1,5 @@
 package edu.escuelaing.campusseguro.events.dto.request;
 
-import edu.escuelaing.campusseguro.events.security.Role;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -22,7 +21,7 @@ import java.util.UUID;
  * @param typeIds          catalog types, from 1 to 4
  * @param startDate        scheduled start; must be in the future (optional)
  * @param scope            buildings and zones from CAM (optional)
- * @param participantRoles community roles that are invited (optional)
+ * @param participantRoles roles that are invited, by the name MS01 gives them (optional)
  */
 public record CreateEventRequest(
         @NotBlank @Size(max = 150) String name,
@@ -30,5 +29,5 @@ public record CreateEventRequest(
         @NotEmpty @Size(max = 4) Set<UUID> typeIds,
         Instant startDate,
         List<@Valid ScopeItemRequest> scope,
-        Set<Role> participantRoles) {
+        Set<String> participantRoles) {
 }

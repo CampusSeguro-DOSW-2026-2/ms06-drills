@@ -97,7 +97,7 @@ class RelatedRepositoriesIT extends PostgresIntegrationTest {
     void participantsAreStoredAndReplacedByDeletingThem() {
         EventParticipantEntity p = new EventParticipantEntity();
         p.setEventId(eventId);
-        p.setRole(Role.ESTUDIANTE);
+        p.setRole("ESTUDIANTE");
         participants.saveAndFlush(p);
         assertEquals(1, participants.findByEventId(eventId).size());
 

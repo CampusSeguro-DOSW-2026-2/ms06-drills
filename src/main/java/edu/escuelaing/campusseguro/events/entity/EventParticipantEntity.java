@@ -1,10 +1,7 @@
 package edu.escuelaing.campusseguro.events.entity;
 
-import edu.escuelaing.campusseguro.events.security.Role;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -14,6 +11,9 @@ import java.util.UUID;
 /**
  * User type (role) invited to an event. General alerts reach the users who
  * have any of the invited roles.
+ *
+ * <p>The role is stored by name because MS01 keeps the roles as data: the administrator creates and renames them, so
+ * the name is not limited to the roles MS06 knows.
  */
 @Entity
 @Table(name = "event_participants")
@@ -28,16 +28,15 @@ public class EventParticipantEntity extends BaseEntity {
     @Column(name = "event_id", nullable = false, updatable = false)
     private UUID eventId;
 
-    /** Invited role. */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "role", nullable = false, length = 20)
-    private Role role;
+    /** Invited role, by name. */
+    @Column(name = "role", nullable = false, length = 30)
+    private String role;
 
     public UUID getId() { return id; }
 
     public UUID getEventId() { return eventId; }
     public void setEventId(UUID eventId) { this.eventId = eventId; }
 
-    public Role getRole() { return role; }
-    public void setRole(Role role) { this.role = role; }
+    public String getRole() { return role; }
+    public void setRole(String role) { this.role = role; }
 }

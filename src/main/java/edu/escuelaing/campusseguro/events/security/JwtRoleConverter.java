@@ -40,16 +40,27 @@ public class JwtRoleConverter implements Converter<Jwt, AbstractAuthenticationTo
      * roles and the permission codes as they come. Unknown roles are ignored; the user name is
      * the {@code sub} claim.
      */
+    /** Authority of a role name: the official ones keep their prefix, the ones of MS01 travel as they are. */
+    private Optional<String> roleAuthority(String value) {
+        Optional<Role> known = Role.fromClaim(value);
+        if (known.isPresent()) {
+            return Optional.of(known.get().authority());
+        }
+        String normalized = RoleNames.normalize(value);
+        return RoleNames.hasStoredFormat(normalized) ? Optional.of("ROLE_" + normalized) : Optional.empty();
+    }
+
     @Override
     public AbstractAuthenticationToken convert(Jwt jwt) {
         List<String> claimValues = jwt.getClaimAsStringList(rolesClaim);
         List<GrantedAuthority> authorities = new ArrayList<>();
         if (claimValues != null) {
             claimValues.stream()
-                    .map(Role::fromClaim)
-                    .flatMap(Optional::stream)
+                    .map(this::roleAuthority)
+                    .filter(Optional::isPresent)
+                    .map(Optional::get)
                     .distinct()
-                    .forEach(role -> authorities.add(new SimpleGrantedAuthority(role.authority())));
+                    .forEach(authority -> authorities.add(new SimpleGrantedAuthority(authority)));
         }
         List<String> permissions = jwt.getClaimAsStringList(permissionsClaim);
         if (permissions != null) {

@@ -30,13 +30,14 @@ class JwtRoleConverterTest {
     }
 
     @Test
-    void mapsKnownRolesAndIgnoresTheRest() {
+    void mapsTheRolesAndKeepsTheOnesMs01Created() {
         JwtRoleConverter converter = new JwtRoleConverter("roles", "permissions");
         Jwt jwt = jwtWith("roles", List.of("COORDINADOR", "role_org", "ORG", "DESCONOCIDO", "  "));
 
         AbstractAuthenticationToken token = converter.convert(jwt);
 
-        assertEquals(Set.of("ROLE_COORDINADOR", "ROLE_ORGANIZADOR"), authorities(token));
+        // DESCONOCIDO is well formed, so it travels like any role MS01 created; the abbreviations become the name
+        assertEquals(Set.of("ROLE_COORDINADOR", "ROLE_ORGANIZADOR", "ROLE_DESCONOCIDO"), authorities(token));
         assertEquals("user-1", token.getName());
     }
 

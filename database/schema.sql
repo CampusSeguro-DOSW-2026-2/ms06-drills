@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS event_scope_items (
 CREATE TABLE IF NOT EXISTS event_participants (
     id          uuid         PRIMARY KEY,
     event_id    uuid         NOT NULL REFERENCES events (id) ON DELETE CASCADE,
-    role        varchar(20)  NOT NULL,
+    role        varchar(30)  NOT NULL,
     created_at  timestamptz  NOT NULL,
     updated_at  timestamptz  NOT NULL,
     UNIQUE (event_id, role)

@@ -70,12 +70,12 @@ class EventUpdateIT extends PostgresIntegrationTest {
         return java.util.Arrays.stream(ids).map(id -> new ScopeItemRequest(ScopeType.ZONE, id)).toList();
     }
 
-    private CreateEventRequest request(String name, Instant start, List<ScopeItemRequest> items, Set<Role> roles) {
+    private CreateEventRequest request(String name, Instant start, List<ScopeItemRequest> items, Set<String> roles) {
         return new CreateEventRequest(name, "desc", Set.of(sismo()), start, items, roles);
     }
 
     private EventResponse createScheduled(String name) {
-        return creation.create(request(name, inDays(3), zones("z1"), Set.of(Role.ESTUDIANTE)), coordinator);
+        return creation.create(request(name, inDays(3), zones("z1"), Set.of("ESTUDIANTE")), coordinator);
     }
 
     private long alertCount(UUID eventId, EventAlertPurpose purpose) {
@@ -88,7 +88,7 @@ class EventUpdateIT extends PostgresIntegrationTest {
         assertEquals(EventStatus.DRAFT, draft.status());
 
         EventResponse edited = update.update(draft.id(),
-                request("Draft to schedule", inDays(2), zones("z1"), Set.of(Role.PROFESOR)), coordinator);
+                request("Draft to schedule", inDays(2), zones("z1"), Set.of("PROFESOR")), coordinator);
 
         assertEquals(EventStatus.SCHEDULED, edited.status());
         assertEquals(2, edited.alerts().size());
@@ -104,7 +104,7 @@ class EventUpdateIT extends PostgresIntegrationTest {
         Instant newStart = inDays(5);
 
         EventResponse edited = update.update(scheduled.id(),
-                request("Scheduled edited", newStart, zones("z1"), Set.of(Role.ESTUDIANTE)), coordinator);
+                request("Scheduled edited", newStart, zones("z1"), Set.of("ESTUDIANTE")), coordinator);
 
         assertEquals(EventStatus.SCHEDULED, edited.status());
         assertEquals("Scheduled edited", edited.name());
@@ -121,7 +121,7 @@ class EventUpdateIT extends PostgresIntegrationTest {
                 .filter(link -> link.purpose() == EventAlertPurpose.GENERAL).findFirst().orElseThrow().alertId();
 
         EventResponse edited = update.update(scheduled.id(),
-                request("Scheduled to draft", null, zones("z1"), Set.of(Role.ESTUDIANTE)), coordinator);
+                request("Scheduled to draft", null, zones("z1"), Set.of("ESTUDIANTE")), coordinator);
 
         assertEquals(EventStatus.DRAFT, edited.status());
         assertEquals(0, alertCount(scheduled.id(), EventAlertPurpose.GENERAL));
@@ -141,7 +141,7 @@ class EventUpdateIT extends PostgresIntegrationTest {
         stateService.transition(scheduled.id(), EventStatus.IN_PROGRESS, "system", null);
 
         EventResponse edited = update.update(scheduled.id(),
-                request("Started edited", start, zones("z1", "z2"), Set.of(Role.ESTUDIANTE, Role.PROFESOR)), coordinator);
+                request("Started edited", start, zones("z1", "z2"), Set.of("ESTUDIANTE", "PROFESOR")), coordinator);
 
         assertEquals(EventStatus.IN_PROGRESS, edited.status());
         assertEquals(2, alertCount(scheduled.id(), EventAlertPurpose.EDIT));
@@ -151,16 +151,16 @@ class EventUpdateIT extends PostgresIntegrationTest {
     @Test
     void scopeAndRolesAreReplaced() {
         EventResponse draft = creation.create(
-                request("Replace data", null, zones("z1", "z2"), Set.of(Role.PROFESOR)), coordinator);
+                request("Replace data", null, zones("z1", "z2"), Set.of("PROFESOR")), coordinator);
 
-        update.update(draft.id(), request("Replace data", null, zones("z2", "z3"), Set.of(Role.ESTUDIANTE)), coordinator);
+        update.update(draft.id(), request("Replace data", null, zones("z2", "z3"), Set.of("ESTUDIANTE")), coordinator);
 
         Set<String> refs = scope.findByEventId(draft.id()).stream()
                 .map(EventScopeItemEntity::getScopeRefId).collect(Collectors.toSet());
-        Set<Role> roles = participants.findByEventId(draft.id()).stream()
+        Set<String> roles = participants.findByEventId(draft.id()).stream()
                 .map(EventParticipantEntity::getRole).collect(Collectors.toSet());
         assertEquals(Set.of("z2", "z3"), refs);
-        assertEquals(Set.of(Role.ESTUDIANTE), roles);
+        assertEquals(Set.of("ESTUDIANTE"), roles);
     }
 
     @Test
@@ -170,7 +170,7 @@ class EventUpdateIT extends PostgresIntegrationTest {
         stateService.transition(scheduled.id(), EventStatus.FINISHED, "system", null);
 
         BusinessException ex = assertThrows(BusinessException.class, () -> update.update(scheduled.id(),
-                request("Finished edited", scheduled.startDate(), zones("z1"), Set.of(Role.ESTUDIANTE)), coordinator));
+                request("Finished edited", scheduled.startDate(), zones("z1"), Set.of("ESTUDIANTE")), coordinator));
 
         assertEquals(ErrorCode.EVENT_NOT_EDITABLE, ex.code());
     }

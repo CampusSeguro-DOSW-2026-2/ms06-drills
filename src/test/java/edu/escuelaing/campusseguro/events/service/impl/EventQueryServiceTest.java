@@ -101,7 +101,7 @@ class EventQueryServiceTest {
         return event;
     }
 
-    private void invite(EventEntity event, Role... roles) {
+    private void invite(EventEntity event, String... roles) {
         List<EventParticipantEntity> rows = java.util.Arrays.stream(roles).map(role -> {
             EventParticipantEntity row = new EventParticipantEntity();
             row.setEventId(event.getId());
@@ -306,7 +306,7 @@ class EventQueryServiceTest {
     void theActiveEventsAreTheOnesTheUserManagesOrIsInvitedTo() {
         EventEntity real = event("Real", EventStatus.IN_PROGRESS, false);
         EventEntity forStudents = event("For students", EventStatus.IN_PROGRESS, false);
-        invite(forStudents, Role.ESTUDIANTE);
+        invite(forStudents, "ESTUDIANTE");
         when(events.findByStatusOrderByStartedAtDesc(EventStatus.IN_PROGRESS))
                 .thenReturn(List.of(running, real, forStudents));
 

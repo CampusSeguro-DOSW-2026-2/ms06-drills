@@ -2,7 +2,6 @@ package edu.escuelaing.campusseguro.events.client.alert;
 
 import edu.escuelaing.campusseguro.events.client.ScopeRef;
 import edu.escuelaing.campusseguro.events.entity.enums.EventAlertPurpose;
-import edu.escuelaing.campusseguro.events.security.Role;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
@@ -20,7 +19,7 @@ import java.util.UUID;
  * @param title               alert title
  * @param instructions        text for the people who receive it
  * @param scope               buildings and zones the alert covers
- * @param recipientRoles      roles that receive the alert
+ * @param recipientRoles      names of the roles that receive the alert
  * @param activationAt        date to send it (scheduled alert)
  * @param activateImmediately send it now
  * @param alertTypes          MS03 alert types (EARTHQUAKE, FIRE, OTHER, OPERATIVA)
@@ -32,7 +31,7 @@ public record AlertCommand(
         String title,
         String instructions,
         List<ScopeRef> scope,
-        Set<Role> recipientRoles,
+        Set<String> recipientRoles,
         Instant activationAt,
         boolean activateImmediately,
         List<String> alertTypes) {
@@ -45,7 +44,7 @@ public record AlertCommand(
             String title,
             String instructions,
             List<ScopeRef> scope,
-            Set<Role> recipientRoles,
+            Set<String> recipientRoles,
             Instant activationAt,
             boolean activateImmediately) {
         this(eventId, purpose, simulacro, title, instructions, scope, recipientRoles,

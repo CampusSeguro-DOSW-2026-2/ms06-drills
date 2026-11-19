@@ -37,7 +37,6 @@ import edu.escuelaing.campusseguro.events.service.SchedulingOutcome;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -114,7 +113,7 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
 
     @Override
     @Transactional
-    public SchedulingOutcome schedule(EventEntity event, List<ScopeRef> scope, Set<Role> roles, AccessActor actor) {
+    public SchedulingOutcome schedule(EventEntity event, List<ScopeRef> scope, Set<String> roles, AccessActor actor) {
         EventStatePayload scheduled = payload(event, EventStatus.SCHEDULED, scope, roles);
         EventStatePayload draft = payload(event, EventStatus.DRAFT, scope, roles);
 
@@ -196,7 +195,7 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
         }
 
         List<ScopeRef> scope = scopeOf(eventId);
-        Set<Role> roles = rolesOf(eventId);
+        Set<String> roles = rolesOf(eventId);
         EventStatePayload running = payload(event, EventStatus.IN_PROGRESS, scope, roles);
         EventStatePayload finished = new EventStatePayload(
                 event.getId(), event.getName(), event.isSimulacro(), EventStatus.FINISHED,
@@ -365,10 +364,10 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
                 .toList();
     }
 
-    private Set<Role> rolesOf(UUID eventId) {
+    private Set<String> rolesOf(UUID eventId) {
         return participants.findByEventId(eventId).stream()
                 .map(participant -> participant.getRole())
-                .collect(Collectors.toCollection(() -> EnumSet.noneOf(Role.class)));
+                .collect(Collectors.toCollection(java.util.TreeSet::new));
     }
 
     private String cut(String text) {
@@ -406,12 +405,12 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
         return new AlertCommand(
                 event.getId(), EventAlertPurpose.BRIGADISTS, event.isSimulacro(),
                 BRIGADIERS_TITLE + event.getName(), BRIGADIERS_TEXT,
-                scope, Set.of(Role.BRIGADISTA), null, true,
+                scope, Set.of("BRIGADISTA"), null, true,
                 AlertTypes.from(event.getTypes()));
     }
 
     /** Alert that tells participants the event started. It is scheduled for the start date. */
-    private AlertCommand generalAlert(EventEntity event, List<ScopeRef> scope, Set<Role> roles) {
+    private AlertCommand generalAlert(EventEntity event, List<ScopeRef> scope, Set<String> roles) {
         return new AlertCommand(
                 event.getId(), EventAlertPurpose.GENERAL, event.isSimulacro(),
                 START_TITLE + event.getName(), START_TEXT,
@@ -419,7 +418,7 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
                 AlertTypes.from(event.getTypes()));
     }
 
-    private EventStatePayload payload(EventEntity event, EventStatus status, List<ScopeRef> scope, Set<Role> roles) {
+    private EventStatePayload payload(EventEntity event, EventStatus status, List<ScopeRef> scope, Set<String> roles) {
         return new EventStatePayload(
                 event.getId(), event.getName(), event.isSimulacro(), status,
                 event.getScheduledStart(), event.getEndedAt(), scope, roles);

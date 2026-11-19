@@ -9,7 +9,6 @@ import edu.escuelaing.campusseguro.events.client.alert.AlertGateway;
 import edu.escuelaing.campusseguro.events.client.brigade.BrigadeGateway;
 import edu.escuelaing.campusseguro.events.client.campus.CampusGateway;
 import edu.escuelaing.campusseguro.events.client.checkin.CheckInGateway;
-import edu.escuelaing.campusseguro.events.client.identity.IdentityGateway;
 import edu.escuelaing.campusseguro.events.dto.request.CreateEventRequest;
 import edu.escuelaing.campusseguro.events.dto.request.ScopeItemRequest;
 import edu.escuelaing.campusseguro.events.dto.response.EventResponse;
@@ -87,9 +86,8 @@ class EventUpdateServiceTest {
     private final BrigadeGateway brigade = mock(BrigadeGateway.class);
     private final AlertGateway alerts = mock(AlertGateway.class);
     private final CampusGateway campus = mock(CampusGateway.class);
-    private final IdentityGateway identity = mock(IdentityGateway.class);
     private final EventUpdateServiceImpl service = new EventUpdateServiceImpl(
-            events, eventTypes, scopeItems, participants, alertLinks, campus, identity,
+            events, eventTypes, scopeItems, participants, alertLinks, campus,
             lifecycle, stateService, audit, checkIn, brigade, alerts, new EventAccessPolicy(), new EventMapper(),
             Clock.fixed(NOW, ZoneOffset.UTC));
 
@@ -148,7 +146,7 @@ class EventUpdateServiceTest {
 
         EventParticipantEntity role = new EventParticipantEntity();
         role.setEventId(id);
-        role.setRole(Role.ESTUDIANTE);
+        role.setRole("ESTUDIANTE");
         when(participants.findByEventId(id)).thenReturn(List.of(role));
 
         general = new EventAlertEntity();
@@ -159,18 +157,18 @@ class EventUpdateServiceTest {
         when(alertLinks.findByEventId(id)).thenReturn(List.of(general));
     }
 
-    private CreateEventRequest request(String name, Instant start, UUID typeId, List<String> zones, Set<Role> roles) {
+    private CreateEventRequest request(String name, Instant start, UUID typeId, List<String> zones, Set<String> roles) {
         List<ScopeItemRequest> scope = zones.stream().map(zone -> new ScopeItemRequest(ScopeType.ZONE, zone)).toList();
         return new CreateEventRequest(name, "old", Set.of(typeId), start, scope, roles);
     }
 
     /** The same data the event already has: editing with it changes nothing. */
     private CreateEventRequest same() {
-        return request("Old", event.getScheduledStart(), sismo.getId(), List.of("z1"), Set.of(Role.ESTUDIANTE));
+        return request("Old", event.getScheduledStart(), sismo.getId(), List.of("z1"), Set.of("ESTUDIANTE"));
     }
 
     private CreateEventRequest renamed(String name) {
-        return request(name, event.getScheduledStart(), sismo.getId(), List.of("z1"), Set.of(Role.ESTUDIANTE));
+        return request(name, event.getScheduledStart(), sismo.getId(), List.of("z1"), Set.of("ESTUDIANTE"));
     }
 
     // ------------------------------------------------------------ general rules
@@ -208,7 +206,7 @@ class EventUpdateServiceTest {
     @Test
     void theKindOfEventCannotChange() {
         InvalidFieldException ex = assertThrows(InvalidFieldException.class, () -> service.update(id,
-                request("Old", START, simulacro.getId(), List.of("z1"), Set.of(Role.ESTUDIANTE)), coordinator));
+                request("Old", START, simulacro.getId(), List.of("z1"), Set.of("ESTUDIANTE")), coordinator));
 
         assertEquals("typeIds", ex.field());
     }
@@ -235,10 +233,10 @@ class EventUpdateServiceTest {
         when(lifecycle.schedule(any(), any(), any(), any()))
                 .thenReturn(new SchedulingOutcome(true, List.of(), List.of()));
 
-        service.update(id, request("Old", START, sismo.getId(), List.of("z1"), Set.of(Role.ESTUDIANTE)), coordinator);
+        service.update(id, request("Old", START, sismo.getId(), List.of("z1"), Set.of("ESTUDIANTE")), coordinator);
 
         verify(lifecycle).schedule(event, List.of(new edu.escuelaing.campusseguro.events.client.ScopeRef(
-                ScopeType.ZONE, "z1")), Set.of(Role.ESTUDIANTE), coordinator);
+                ScopeType.ZONE, "z1")), Set.of("ESTUDIANTE"), coordinator);
         assertEquals(START, event.getScheduledStart());
     }
 
@@ -259,7 +257,7 @@ class EventUpdateServiceTest {
         doThrow(down("MS02")).when(campus).validateScope(any(), any());
 
         EventResponse response = service.update(id,
-                request("Old", null, sismo.getId(), List.of("z9"), Set.of(Role.ESTUDIANTE)), coordinator);
+                request("Old", null, sismo.getId(), List.of("z9"), Set.of("ESTUDIANTE")), coordinator);
 
         assertEquals(1, response.scope().size());
         assertEquals("z1", response.scope().get(0).id());
@@ -271,7 +269,7 @@ class EventUpdateServiceTest {
     @Test
     void aScheduledEventRejectsAPastDate() {
         InvalidFieldException ex = assertThrows(InvalidFieldException.class, () -> service.update(id,
-                request("Old", NOW.minusSeconds(1), sismo.getId(), List.of("z1"), Set.of(Role.ESTUDIANTE)), coordinator));
+                request("Old", NOW.minusSeconds(1), sismo.getId(), List.of("z1"), Set.of("ESTUDIANTE")), coordinator));
 
         assertEquals("startDate", ex.field());
     }
@@ -309,7 +307,7 @@ class EventUpdateServiceTest {
         verify(alerts).createAlert(alert.capture(), any(AlertActor.class));
         assertEquals(EventAlertPurpose.EDIT, alert.getValue().purpose());
         assertTrue(alert.getValue().activateImmediately());
-        assertEquals(Set.of(Role.BRIGADISTA), alert.getValue().recipientRoles());
+        assertEquals(Set.of("BRIGADISTA"), alert.getValue().recipientRoles());
 
         verify(alerts, never()).reschedule(anyString(), any(Instant.class), any(AlertActor.class));
         verify(stateService, never()).transition(any(), any(), anyString(), any());
@@ -320,7 +318,7 @@ class EventUpdateServiceTest {
     @Test
     void aNewDateReschedulesTheGeneralAlert() {
         service.update(id,
-                request("Old", NEW_START, sismo.getId(), List.of("z1"), Set.of(Role.ESTUDIANTE)), coordinator);
+                request("Old", NEW_START, sismo.getId(), List.of("z1"), Set.of("ESTUDIANTE")), coordinator);
 
         verify(alerts).reschedule(eq("general-1"), eq(NEW_START), any(AlertActor.class));
         assertEquals(NEW_START, event.getScheduledStart());
@@ -342,7 +340,7 @@ class EventUpdateServiceTest {
         doThrow(down("MS03")).when(alerts).reschedule(anyString(), any(Instant.class), any(AlertActor.class));
 
         assertThrows(ExternalServiceUnavailableException.class, () -> service.update(id,
-                request("New", NEW_START, sismo.getId(), List.of("z1"), Set.of(Role.ESTUDIANTE)), coordinator));
+                request("New", NEW_START, sismo.getId(), List.of("z1"), Set.of("ESTUDIANTE")), coordinator));
 
         ArgumentCaptor<EventStatePayload> chi = ArgumentCaptor.forClass(EventStatePayload.class);
         verify(checkIn, times(2)).pushState(chi.capture());
@@ -365,7 +363,7 @@ class EventUpdateServiceTest {
     @Test
     void removingTheDateSendsTheScheduledEventBackToDraft() {
         EventResponse response = service.update(id,
-                request("Old", null, sismo.getId(), List.of("z1"), Set.of(Role.ESTUDIANTE)), coordinator);
+                request("Old", null, sismo.getId(), List.of("z1"), Set.of("ESTUDIANTE")), coordinator);
 
         verify(alerts).archive(eq("general-1"), any(AlertActor.class));
         ArgumentCaptor<EventStatePayload> chi = ArgumentCaptor.forClass(EventStatePayload.class);
@@ -382,7 +380,7 @@ class EventUpdateServiceTest {
         doThrow(down("MS05")).when(brigade).pushState(any(EventStatePayload.class));
 
         assertThrows(ExternalServiceUnavailableException.class, () -> service.update(id,
-                request("Old", null, sismo.getId(), List.of("z1"), Set.of(Role.ESTUDIANTE)), coordinator));
+                request("Old", null, sismo.getId(), List.of("z1"), Set.of("ESTUDIANTE")), coordinator));
 
         verify(alerts).reschedule(eq("general-1"), eq(START), any(AlertActor.class));
         verify(checkIn, times(2)).pushState(any(EventStatePayload.class));
@@ -396,7 +394,7 @@ class EventUpdateServiceTest {
         givenEvent(EventStatus.IN_PROGRESS, START, false);
 
         InvalidFieldException ex = assertThrows(InvalidFieldException.class, () -> service.update(id,
-                request("Old", NEW_START, sismo.getId(), List.of("z1"), Set.of(Role.ESTUDIANTE)), coordinator));
+                request("Old", NEW_START, sismo.getId(), List.of("z1"), Set.of("ESTUDIANTE")), coordinator));
 
         assertEquals("startDate", ex.field());
     }
@@ -406,7 +404,7 @@ class EventUpdateServiceTest {
         givenEvent(EventStatus.IN_PROGRESS, START, false);
 
         InvalidFieldException ex = assertThrows(InvalidFieldException.class, () -> service.update(id,
-                request("Old", START, sismo.getId(), List.of(), Set.of(Role.ESTUDIANTE)), coordinator));
+                request("Old", START, sismo.getId(), List.of(), Set.of("ESTUDIANTE")), coordinator));
 
         assertEquals("scope", ex.field());
     }
@@ -425,7 +423,7 @@ class EventUpdateServiceTest {
     void editingAStartedEventAlertsBrigadiersAndParticipants() {
         givenEvent(EventStatus.IN_PROGRESS, START, false);
 
-        service.update(id, request("New", START, sismo.getId(), List.of("z1"), Set.of(Role.ESTUDIANTE, Role.PROFESOR)),
+        service.update(id, request("New", START, sismo.getId(), List.of("z1"), Set.of("ESTUDIANTE", "PROFESOR")),
                 coordinator);
 
         ArgumentCaptor<EventStatePayload> chi = ArgumentCaptor.forClass(EventStatePayload.class);
@@ -435,8 +433,8 @@ class EventUpdateServiceTest {
 
         ArgumentCaptor<AlertCommand> alert = ArgumentCaptor.forClass(AlertCommand.class);
         verify(alerts, times(2)).createAlert(alert.capture(), any(AlertActor.class));
-        assertEquals(Set.of(Role.BRIGADISTA), alert.getAllValues().get(0).recipientRoles());
-        assertEquals(Set.of(Role.ESTUDIANTE, Role.PROFESOR), alert.getAllValues().get(1).recipientRoles());
+        assertEquals(Set.of("BRIGADISTA"), alert.getAllValues().get(0).recipientRoles());
+        assertEquals(Set.of("ESTUDIANTE", "PROFESOR"), alert.getAllValues().get(1).recipientRoles());
         assertEquals(EventAlertPurpose.EDIT, alert.getAllValues().get(1).purpose());
         verify(stateService, never()).transition(any(), any(), anyString(), any());
     }

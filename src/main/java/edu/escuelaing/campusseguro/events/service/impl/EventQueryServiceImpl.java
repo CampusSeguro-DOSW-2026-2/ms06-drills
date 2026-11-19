@@ -28,7 +28,6 @@ import edu.escuelaing.campusseguro.events.repository.EventScopeItemRepository;
 import edu.escuelaing.campusseguro.events.security.AccessActor;
 import edu.escuelaing.campusseguro.events.security.EventAccessPolicy;
 import edu.escuelaing.campusseguro.events.security.Permission;
-import edu.escuelaing.campusseguro.events.security.Role;
 import edu.escuelaing.campusseguro.events.service.EventEvaluationService;
 import edu.escuelaing.campusseguro.events.service.EventQueryService;
 import java.time.Instant;
@@ -137,7 +136,7 @@ public class EventQueryServiceImpl implements EventQueryService {
                     .orElseThrow(() -> new ResourceNotFoundException("Event not found: " + eventId));
             accessPolicy.assertCan(actor, event.isSimulacro(), Permission.Action.READ, "read");
             List<ScopeRef> scope = scope(eventId);
-            Set<Role> roles = roles(eventId);
+            Set<String> roles = roles(eventId);
             EventResponse response = mapper.toResponse(
                     event, scope, roles, alertLinks.findByEventId(eventId), List.of());
             return new Detail(response, brigadiers.findByEventId(eventId));
@@ -237,14 +236,14 @@ public class EventQueryServiceImpl implements EventQueryService {
                 .toList();
     }
 
-    private Set<Role> roles(UUID eventId) {
+    private Set<String> roles(UUID eventId) {
         return participants.findByEventId(eventId).stream()
                 .map(row -> row.getRole())
                 .collect(Collectors.toSet());
     }
 
-    private boolean concerns(AccessActor actor, Set<Role> invited) {
-        return actor.roles().stream().anyMatch(invited::contains);
+    private boolean concerns(AccessActor actor, Set<String> invited) {
+        return actor.roleNames().stream().anyMatch(invited::contains);
     }
 
     /** Lower-case LIKE pattern that finds the text anywhere in the name; {@code !} escapes % and _. */

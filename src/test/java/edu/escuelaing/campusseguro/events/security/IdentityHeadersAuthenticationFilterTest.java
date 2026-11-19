@@ -56,16 +56,17 @@ class IdentityHeadersAuthenticationFilterTest {
 
         filter.doFilter(request, new MockHttpServletResponse(), chain);
 
-        assertEquals(Set.of("ROLE_AUDITOR", "ms06:drill:read", "ms06:real_event:read"), authorities());
+        // ROL_NUEVO was created by MS01 and travels so the event that invites it reaches this user
+        assertEquals(Set.of("ROLE_AUDITOR", "ROLE_ROL_NUEVO", "ms06:drill:read", "ms06:real_event:read"), authorities());
         assertEquals(USER, SecurityContextHolder.getContext().getAuthentication().getName());
         verify(chain).doFilter(any(), any());
     }
 
     @Test
-    void aRoleThatMs06DoesNotKnowIsNotAReasonToReject() throws Exception {
+    void aRoleThatMs06DoesNotKnowStillTravelsForTheParticipants() throws Exception {
         filter.doFilter(request(USER, "MONITOR_EVACUACION", "ms06:drill:read"), new MockHttpServletResponse(), chain);
 
-        assertEquals(Set.of("ms06:drill:read"), authorities());
+        assertEquals(Set.of("ROLE_MONITOR_EVACUACION", "ms06:drill:read"), authorities());
     }
 
     @Test

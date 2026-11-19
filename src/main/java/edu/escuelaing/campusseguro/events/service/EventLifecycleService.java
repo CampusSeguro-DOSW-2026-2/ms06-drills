@@ -5,7 +5,6 @@ import edu.escuelaing.campusseguro.events.dto.response.EventFinishResponse;
 import edu.escuelaing.campusseguro.events.entity.EventEntity;
 import edu.escuelaing.campusseguro.events.exception.ExternalServiceUnavailableException;
 import edu.escuelaing.campusseguro.events.security.AccessActor;
-import edu.escuelaing.campusseguro.events.security.Role;
 import edu.escuelaing.campusseguro.events.exception.InvalidStateTransitionException;
 import edu.escuelaing.campusseguro.events.exception.ResourceNotFoundException;
 import java.util.List;
@@ -51,7 +50,7 @@ public interface EventLifecycleService {
      * @return what happened; see {@link SchedulingOutcome}
      * @throws ExternalServiceUnavailableException if CHI does not answer
      */
-    SchedulingOutcome schedule(EventEntity event, List<ScopeRef> scope, Set<Role> roles, AccessActor actor);
+    SchedulingOutcome schedule(EventEntity event, List<ScopeRef> scope, Set<String> roles, AccessActor actor);
 
     /**
      * Starts every Scheduled event whose start date has arrived. Each event is started in its own

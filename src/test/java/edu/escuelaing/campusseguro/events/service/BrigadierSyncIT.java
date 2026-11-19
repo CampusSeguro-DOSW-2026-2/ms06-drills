@@ -49,7 +49,7 @@ class BrigadierSyncIT extends PostgresIntegrationTest {
         CreateEventRequest request = new CreateEventRequest(
                 name, null, Set.of(types.findByCode("SISMO").orElseThrow().getId()),
                 Instant.now().plus(2, ChronoUnit.DAYS),
-                List.of(new ScopeItemRequest(ScopeType.ZONE, "z1")), Set.of(Role.ESTUDIANTE));
+                List.of(new ScopeItemRequest(ScopeType.ZONE, "z1")), Set.of("ESTUDIANTE"));
         return creation.create(request, coordinator).id();
     }
 

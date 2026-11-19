@@ -2,7 +2,6 @@ package edu.escuelaing.campusseguro.events.service.impl;
 
 import edu.escuelaing.campusseguro.events.client.ScopeRef;
 import edu.escuelaing.campusseguro.events.client.campus.CampusGateway;
-import edu.escuelaing.campusseguro.events.client.identity.IdentityGateway;
 import edu.escuelaing.campusseguro.events.dto.request.CreateEventRequest;
 import edu.escuelaing.campusseguro.events.dto.request.ScopeItemRequest;
 import edu.escuelaing.campusseguro.events.dto.response.EventResponse;
@@ -24,7 +23,7 @@ import edu.escuelaing.campusseguro.events.repository.EventScopeItemRepository;
 import edu.escuelaing.campusseguro.events.repository.EventTypeRepository;
 import edu.escuelaing.campusseguro.events.security.AccessActor;
 import edu.escuelaing.campusseguro.events.security.EventAccessPolicy;
-import edu.escuelaing.campusseguro.events.security.Role;
+import edu.escuelaing.campusseguro.events.security.RoleNames;
 import edu.escuelaing.campusseguro.events.service.EventCreationService;
 import edu.escuelaing.campusseguro.events.service.EventLifecycleService;
 import edu.escuelaing.campusseguro.events.service.EventStateService;
@@ -32,8 +31,8 @@ import edu.escuelaing.campusseguro.events.service.SchedulingOutcome;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.TreeSet;
 import java.util.EnumMap;
-import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -53,7 +52,6 @@ public class EventCreationServiceImpl implements EventCreationService {
     private final EventStateService stateService;
     private final EventLifecycleService lifecycle;
     private final CampusGateway campus;
-    private final IdentityGateway identity;
     private final EventAccessPolicy accessPolicy;
     private final EventMapper mapper;
     private final Clock clock;
@@ -66,7 +64,6 @@ public class EventCreationServiceImpl implements EventCreationService {
             EventStateService stateService,
             EventLifecycleService lifecycle,
             CampusGateway campus,
-            IdentityGateway identity,
             EventAccessPolicy accessPolicy,
             EventMapper mapper,
             Clock clock) {
@@ -77,7 +74,6 @@ public class EventCreationServiceImpl implements EventCreationService {
         this.stateService = stateService;
         this.lifecycle = lifecycle;
         this.campus = campus;
-        this.identity = identity;
         this.accessPolicy = accessPolicy;
         this.mapper = mapper;
         this.clock = clock;
@@ -95,7 +91,7 @@ public class EventCreationServiceImpl implements EventCreationService {
 
         List<EventWarning> warnings = new ArrayList<>();
         List<ScopeRef> scope = validatedScope(request.scope(), warnings);
-        Set<Role> roles = validatedRoles(request.participantRoles(), warnings);
+        Set<String> roles = validatedRoles(request.participantRoles());
 
         EventEntity event = saveEvent(request, types, simulacro, actor);
         saveScope(event, scope);
@@ -145,27 +141,21 @@ public class EventCreationServiceImpl implements EventCreationService {
     }
 
     /** Validates the roles: only community roles can be invited. If AUT is down the roles are left pending. */
-    private Set<Role> validatedRoles(Set<Role> requested, List<EventWarning> warnings) {
+    private Set<String> validatedRoles(Set<String> requested) {
         if (requested == null || requested.isEmpty()) {
             return Set.of();
         }
-        List<String> notInvitable = requested.stream()
-                .filter(role -> !role.isCommunity())
-                .map(Role::name)
+        List<String> invalid = requested.stream()
+                .map(RoleNames::normalize)
+                .filter(name -> !RoleNames.hasStoredFormat(name))
                 .sorted()
                 .toList();
-        if (!notInvitable.isEmpty()) {
-            throw new InvalidReferenceException("participantRoles", notInvitable);
+        if (!invalid.isEmpty()) {
+            throw new InvalidReferenceException("participantRoles", invalid);
         }
-        Set<Role> roles = EnumSet.copyOf(requested);
-        try {
-            identity.validateRoles(roles);
-        } catch (ExternalServiceUnavailableException ex) {
-            warnings.add(new EventWarning("PARTICIPANTS_PENDING",
-                    "AUT is unavailable: the participants were not saved. Add them later to schedule the event."));
-            return Set.of();
-        }
-        return roles;
+        return requested.stream()
+                .map(RoleNames::normalize)
+                .collect(java.util.stream.Collectors.toCollection(TreeSet::new));
     }
 
     private EventEntity saveEvent(CreateEventRequest request, Set<EventTypeEntity> types, boolean simulacro,
@@ -192,7 +182,7 @@ public class EventCreationServiceImpl implements EventCreationService {
         scopeItems.saveAll(items);
     }
 
-    private void saveRoles(EventEntity event, Collection<Role> roles) {
+    private void saveRoles(EventEntity event, Collection<String> roles) {
         List<EventParticipantEntity> items = roles.stream().map(role -> {
             EventParticipantEntity item = new EventParticipantEntity();
             item.setEventId(event.getId());

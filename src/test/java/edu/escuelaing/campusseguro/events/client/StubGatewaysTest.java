@@ -38,7 +38,7 @@ class StubGatewaysTest {
         AlertCommand command = new AlertCommand(eventId, EventAlertPurpose.FINISH, false, "t", "i",
                 List.of(), Set.of(), null, true);
 
-        AlertActor actor = new AlertActor("11111111-1111-4111-8111-111111111111", Set.of(Role.COORDINADOR));
+        AlertActor actor = new AlertActor("11111111-1111-4111-8111-111111111111", Set.of("COORDINADOR"));
         String id = stub.createAlert(command, actor);
         stub.reschedule(id, Instant.parse("2026-12-03T10:00:00Z"), actor);
         stub.archive(id, actor);
