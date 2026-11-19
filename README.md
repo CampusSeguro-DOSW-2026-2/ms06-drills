@@ -319,7 +319,7 @@ Códigos de error (`ErrorCode`): `VALIDATION_ERROR`, `UNAUTHORIZED`, `FORBIDDEN`
 - **Datos sensibles:** el servicio no guarda contraseñas ni datos personales de los usuarios; solo identificadores de usuario y de brigadistas.
 - **Riesgos conocidos:**
   - Los contratos con MS01, MS02, MS03, MS04, MS05 y MS08 siguen siendo propuestas hasta que cada equipo los confirme.
-  - La autenticación entre servicios (token o clave de servicio y rol esperado por cada módulo) está por definir; MS03 espera un rol como `SERVICE_MS06`.
+  - Las llamadas a otros módulos usan la clave de servicio (`X-Service-Key` y `X-Service-Name`). Cuando actúan en nombre de un usuario envían además `X-User-Id`, `X-User-Role` y `X-User-Permission` juntas, como exige el Gateway; si el usuario actual no es el destinatario, se envían los permisos configurados del usuario de sistema.
   - Un error 4xx de otro módulo hoy se reporta como 503 «no disponible».
 
 <p align="right"><a href="#indice">⬆ Volver al índice</a></p>
