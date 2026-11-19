@@ -19,6 +19,7 @@ import edu.escuelaing.campusseguro.events.repository.EventTypeRepository;
 import edu.escuelaing.campusseguro.events.repository.PostgresIntegrationTest;
 import edu.escuelaing.campusseguro.events.security.AccessActor;
 import edu.escuelaing.campusseguro.events.security.Role;
+import edu.escuelaing.campusseguro.events.security.TestActors;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -47,7 +48,7 @@ class EventCreationIT extends PostgresIntegrationTest {
     @Autowired
     private StubCheckInGateway checkInStub;
 
-    private final AccessActor coordinator = new AccessActor("coord-it", Set.of(Role.COORDINADOR));
+    private final AccessActor coordinator = TestActors.actor("coord-it", Role.COORDINADOR);
 
     private UUID typeId(String code) {
         return types.findByCode(code).orElseThrow().getId();

@@ -22,6 +22,7 @@ import edu.escuelaing.campusseguro.events.exception.ResourceNotFoundException;
 import edu.escuelaing.campusseguro.events.security.AccessActor;
 import edu.escuelaing.campusseguro.events.security.EventAccessPolicy;
 import edu.escuelaing.campusseguro.events.security.Role;
+import edu.escuelaing.campusseguro.events.security.TestActors;
 import java.math.BigDecimal;
 import java.util.Map;
 import org.springframework.security.access.AccessDeniedException;
@@ -74,7 +75,7 @@ import static org.mockito.Mockito.when;
 class EventLifecycleServiceTest {
 
     private static AccessActor actor(String userId) {
-        return new AccessActor(userId, Set.of(Role.COORDINADOR));
+        return TestActors.actor(userId, Role.COORDINADOR);
     }
 
     private static final Instant START = Instant.parse("2026-12-01T15:00:00Z");
@@ -482,7 +483,7 @@ class EventLifecycleServiceTest {
 
     // ----- finishing (RF-EVE-04) -----
 
-    private final AccessActor organizer = new AccessActor("org-1", Set.of(Role.ORGANIZADOR));
+    private final AccessActor organizer = TestActors.actor("org-1", Role.ORGANIZADOR);
 
     private EventEntity runningEvent() {
         EventEntity running = scheduledEvent(START);
@@ -557,7 +558,7 @@ class EventLifecycleServiceTest {
     @Test
     void theRoleMustMatchTheKindOfEvent() {
         EventEntity drill = runningEvent();
-        AccessActor coordinator = new AccessActor("coord-1", Set.of(Role.COORDINADOR));
+        AccessActor coordinator = TestActors.actor("coord-1", Role.COORDINADOR);
 
         assertThrows(AccessDeniedException.class, () -> service.finish(drill.getId(), coordinator));
 

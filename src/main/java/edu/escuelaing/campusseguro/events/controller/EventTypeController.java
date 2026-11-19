@@ -32,7 +32,7 @@ public class EventTypeController {
 
     /** Active types, to fill the type selector when creating an event. */
     @GetMapping
-    @PreAuthorize("hasAnyRole('COORDINADOR','ORGANIZADOR','ADMIN','AUDITOR')")
+    @PreAuthorize("hasAnyAuthority('ms06:drill:read','ms06:real_event:read','ms06:drill:manage','ms06:real_event:manage')")
     @Operation(summary = "List the active event types")
     public List<EventTypeResponse> list() {
         return service.listActive();
@@ -41,7 +41,7 @@ public class EventTypeController {
     /** Adds a type to the catalog. Only the coordinator can do it. */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('COORDINADOR')")
+    @PreAuthorize("hasAuthority('ms06:real_event:manage')")
     @Operation(summary = "Add an event type (coordinator only)")
     public EventTypeResponse create(@Valid @RequestBody CreateEventTypeRequest request, Authentication authentication) {
         return service.create(request.name(), AccessActor.from(authentication).auditId());

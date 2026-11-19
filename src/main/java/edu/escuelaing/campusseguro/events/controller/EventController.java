@@ -64,7 +64,7 @@ public class EventController {
      */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyRole('COORDINADOR','ORGANIZADOR')")
+    @PreAuthorize("hasAnyAuthority('ms06:drill:manage','ms06:real_event:manage')")
     @Operation(summary = "Create an event or drill")
     public EventResponse create(@Valid @RequestBody CreateEventRequest request, Authentication authentication) {
         return creation.create(request, AccessActor.from(authentication));
@@ -76,7 +76,7 @@ public class EventController {
      * the event is Draft, Scheduled or In progress.
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('COORDINADOR','ORGANIZADOR')")
+    @PreAuthorize("hasAnyAuthority('ms06:drill:manage','ms06:real_event:manage')")
     @Operation(summary = "Edit an event or drill")
     public EventResponse update(
             @PathVariable UUID id,
@@ -102,7 +102,7 @@ public class EventController {
      * (drills) can do it. The answer has the general metrics of the event and any warning.
      */
     @PatchMapping("/{id}/finalizar")
-    @PreAuthorize("hasAnyRole('COORDINADOR','ORGANIZADOR')")
+    @PreAuthorize("hasAnyAuthority('ms06:drill:execute','ms06:real_event:execute')")
     @Operation(summary = "Finish an event in progress")
     public EventFinishResponse finish(@PathVariable UUID id, Authentication authentication) {
         return lifecycle.finish(id, AccessActor.from(authentication));
@@ -114,14 +114,15 @@ public class EventController {
      * normal answer when nothing matches.
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('COORDINADOR','ORGANIZADOR','ADMIN','AUDITOR')")
+    @PreAuthorize("hasAnyAuthority('ms06:drill:read','ms06:real_event:read')")
     @Operation(summary = "List and search events")
     public PageResponse<EventSummaryResponse> search(
             @RequestParam(required = false) String title,
             @RequestParam(required = false) EventStatus status,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        return queries.search(title, status, page, size);
+            @RequestParam(defaultValue = "20") int size,
+            Authentication authentication) {
+        return queries.search(title, status, page, size, AccessActor.from(authentication));
     }
 
     /**
@@ -139,9 +140,9 @@ public class EventController {
      * Detail of an event. In progress: real-time indicators. Finished: the saved evaluation.
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('COORDINADOR','ORGANIZADOR','ADMIN','AUDITOR')")
+    @PreAuthorize("hasAnyAuthority('ms06:drill:read','ms06:real_event:read')")
     @Operation(summary = "Detail and monitoring of an event")
-    public EventDetailResponse detail(@PathVariable UUID id) {
-        return queries.detail(id);
+    public EventDetailResponse detail(@PathVariable UUID id, Authentication authentication) {
+        return queries.detail(id, AccessActor.from(authentication));
     }
 }

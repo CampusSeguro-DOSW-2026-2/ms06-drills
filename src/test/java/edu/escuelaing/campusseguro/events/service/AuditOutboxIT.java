@@ -18,6 +18,7 @@ import edu.escuelaing.campusseguro.events.repository.PendingAuditRepository;
 import edu.escuelaing.campusseguro.events.repository.PostgresIntegrationTest;
 import edu.escuelaing.campusseguro.events.security.AccessActor;
 import edu.escuelaing.campusseguro.events.security.Role;
+import edu.escuelaing.campusseguro.events.security.TestActors;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -46,7 +47,7 @@ class AuditOutboxIT extends PostgresIntegrationTest {
     @Autowired
     private StubAuditGateway auditStub;
 
-    private final AccessActor coordinator = new AccessActor("coord-audit", Set.of(Role.COORDINADOR));
+    private final AccessActor coordinator = TestActors.actor("coord-audit", Role.COORDINADOR);
 
     /**
      * The database is shared by all integration tests, so old pending records of other tests may exist.

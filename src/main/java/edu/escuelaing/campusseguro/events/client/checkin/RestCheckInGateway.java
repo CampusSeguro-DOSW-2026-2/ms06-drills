@@ -13,6 +13,7 @@ import edu.escuelaing.campusseguro.events.entity.enums.ScopeType;
 import edu.escuelaing.campusseguro.events.exception.ExternalServiceUnavailableException;
 import edu.escuelaing.campusseguro.events.security.IdentityHeaders;
 import edu.escuelaing.campusseguro.events.security.Role;
+import edu.escuelaing.campusseguro.events.security.UserPermissions;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,8 +33,8 @@ import org.springframework.web.client.RestClient;
  * {@code PUT /api/v1/chi/eventos/{id}/estado} and {@code GET /api/v1/chi/eventos/{id}/checkins}.
  *
  * <p>The check-in numbers come from {@code GET /api/v1/chi/eventos/{id}/consolidado}. That route is
- * a user route in MS04, so it is called with the system user ({@code X-User-Id} and
- * {@code X-User-Role}); the role needs the MS04 dashboard permission (ORGANIZADOR has it).
+ * a user route in MS04, so it is called with the system user ({@code X-User-Id}, {@code X-User-Role} and
+ * {@code X-User-Permission}); MS04 requires the permission {@code ms04:dashboard:read}.
  * The consolidated answer has no participation percentage, so that value is left empty.
  */
 @Component
@@ -50,6 +51,7 @@ public class RestCheckInGateway implements CheckInGateway {
     private final String statePath;
     private final String consolidatedPath;
     private final String checkinsPath;
+    private final String systemUserPermissions;
 
     public RestCheckInGateway(
             RestClientFactory factory,
@@ -61,7 +63,9 @@ public class RestCheckInGateway implements CheckInGateway {
             @Value("${app.clients.ms04.consolidated-path:/api/v1/chi/eventos/{eventId}/consolidado}")
                     String consolidatedPath,
             @Value("${app.clients.ms04.checkins-path:/api/v1/chi/eventos/{eventId}/checkins}")
-                    String checkinsPath) {
+                    String checkinsPath,
+            @Value("${app.gateway.system-user-permissions:" + UserPermissions.DEFAULT_SYSTEM_PERMISSIONS + "}")
+                    String systemUserPermissions) {
         if (serviceKey == null || serviceKey.isBlank()) {
             throw new IllegalStateException("app.gateway.service-key is required (GATEWAY_SERVICE_KEY)");
         }
@@ -74,6 +78,7 @@ public class RestCheckInGateway implements CheckInGateway {
         this.statePath = statePath;
         this.consolidatedPath = consolidatedPath;
         this.checkinsPath = checkinsPath;
+        this.systemUserPermissions = systemUserPermissions;
     }
 
     @Override
@@ -143,6 +148,7 @@ public class RestCheckInGateway implements CheckInGateway {
         addServiceHeaders(headers);
         headers.set(IdentityHeaders.USER_ID, systemUserId);
         headers.set(IdentityHeaders.USER_ROLE, systemUserRole);
+        headers.set(IdentityHeaders.USER_PERMISSION, UserPermissions.forSystem(systemUserPermissions));
     }
 
     private void requireSystemUser() {

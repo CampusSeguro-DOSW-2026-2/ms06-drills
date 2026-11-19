@@ -14,6 +14,7 @@ import edu.escuelaing.campusseguro.events.client.WireMockTestBase;
 import edu.escuelaing.campusseguro.events.entity.enums.ScopeType;
 import edu.escuelaing.campusseguro.events.exception.ExternalServiceUnavailableException;
 import edu.escuelaing.campusseguro.events.exception.InvalidReferenceException;
+import edu.escuelaing.campusseguro.events.security.UserPermissions;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -30,7 +31,7 @@ class RestCampusGatewayTest extends WireMockTestBase {
     }
 
     private RestCampusGateway gateway(String key, String systemUser) {
-        return new RestCampusGateway(factory, baseUrl(), key, systemUser, "ORGANIZADOR", BUILDING, ZONE, ROUTES);
+        return new RestCampusGateway(factory, baseUrl(), key, systemUser, "ORGANIZADOR", BUILDING, ZONE, ROUTES, "");
     }
 
     @Test
@@ -49,7 +50,9 @@ class RestCampusGatewayTest extends WireMockTestBase {
                 .withHeader("X-Service-Key", equalTo(KEY))
                 .withHeader("X-Service-Name", equalTo("ms06"))
                 .withHeader("X-User-Id", equalTo(SYSTEM_USER))
-                .withHeader("X-User-Role", equalTo("ORGANIZADOR")));
+                .withHeader("X-User-Role", equalTo("ORGANIZADOR"))
+                // No permissions configured: the defaults of the system user
+                .withHeader("X-User-Permission", equalTo(UserPermissions.DEFAULT_SYSTEM_PERMISSIONS)));
     }
 
     @Test

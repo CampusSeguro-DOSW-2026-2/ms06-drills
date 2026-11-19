@@ -16,12 +16,17 @@ import edu.escuelaing.campusseguro.events.entity.enums.EventStatus;
 import edu.escuelaing.campusseguro.events.repository.EventRepository;
 import edu.escuelaing.campusseguro.events.repository.EventTypeRepository;
 import edu.escuelaing.campusseguro.events.repository.PostgresIntegrationTest;
+import edu.escuelaing.campusseguro.events.security.Role;
+import edu.escuelaing.campusseguro.events.security.local.LocalPermissions;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
@@ -46,7 +51,11 @@ class EventApiIT extends PostgresIntegrationTest {
     }
 
     private RequestPostProcessor as(String role) {
-        return jwt().jwt(token -> token.subject("user-" + role)).authorities(new SimpleGrantedAuthority("ROLE_" + role));
+        List<GrantedAuthority> authorities = new ArrayList<>();
+        authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
+        Role.fromClaim(role).ifPresent(known -> LocalPermissions.of(known)
+                .forEach(code -> authorities.add(new SimpleGrantedAuthority(code))));
+        return jwt().jwt(token -> token.subject("user-" + role)).authorities(authorities);
     }
 
     private UUID typeId(String code) {
@@ -243,8 +252,39 @@ class EventApiIT extends PostgresIntegrationTest {
     }
 
     @Test
+    void theListOnlyShowsTheKindOfEventTheRoleMayRead() throws Exception {
+        createDraft("Kind filter real event");
+
+        mvc.perform(get("/api/v1/eventos").param("title", "kind filter").with(as("COORDINADOR")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total_elementos").value(1));
+        mvc.perform(get("/api/v1/eventos").param("title", "kind filter").with(as("ORGANIZADOR")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total_elementos").value(0));
+    }
+
+    @Test
+    void theAdminHasNoAccessToEventsAndTheAuditorCannotChangeThem() throws Exception {
+        mvc.perform(get("/api/v1/eventos").with(as("ADMIN"))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/eventos/" + UUID.randomUUID()).with(as("ADMIN"))).andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/eventos").with(as("AUDITOR"))
+                        .contentType(MediaType.APPLICATION_JSON).content(body("x", typeId("SISMO"))))
+                .andExpect(status().isForbidden());
+        mvc.perform(patch("/api/v1/eventos/" + UUID.randomUUID() + "/finalizar").with(as("AUDITOR")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void theOrganizerCannotReadTheDetailOfARealEvent() throws Exception {
+        String id = createDraft("Kind detail real event");
+
+        mvc.perform(get("/api/v1/eventos/" + id).with(as("ORGANIZADOR"))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/eventos/" + id).with(as("COORDINADOR"))).andExpect(status().isOk());
+    }
+
+    @Test
     void aSearchWithoutResultsIsAnEmptyPage() throws Exception {
-        mvc.perform(get("/api/v1/eventos").param("title", "no-such-event-xyz").with(as("ADMIN")))
+        mvc.perform(get("/api/v1/eventos").param("title", "no-such-event-xyz").with(as("AUDITOR")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.contenido").isEmpty())
                 .andExpect(jsonPath("$.total_elementos").value(0))

@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -38,6 +39,7 @@ import edu.escuelaing.campusseguro.events.repository.EventScopeItemRepository;
 import edu.escuelaing.campusseguro.events.security.AccessActor;
 import edu.escuelaing.campusseguro.events.security.EventAccessPolicy;
 import edu.escuelaing.campusseguro.events.security.Role;
+import edu.escuelaing.campusseguro.events.security.TestActors;
 import edu.escuelaing.campusseguro.events.service.EventEvaluationService;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -52,6 +54,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -70,6 +73,8 @@ class EventQueryServiceTest {
     private final CheckInGateway checkIn = mock(CheckInGateway.class);
     private final BrigadeGateway brigade = mock(BrigadeGateway.class);
     private final TransactionTemplate tx = new TransactionTemplate(mock(PlatformTransactionManager.class));
+    /** Reads drills and real events (the auditor has the read permission of both kinds). */
+    private final AccessActor reader = TestActors.actor("reader", Role.AUDITOR);
     private final EventQueryServiceImpl service = new EventQueryServiceImpl(
             events, scopeItems, participants, alertLinks, brigadiers, evaluation, checkIn, brigade,
             new EventMapper(), new EventAccessPolicy(), tx);
@@ -131,14 +136,44 @@ class EventQueryServiceTest {
     // ---- search ----
 
     @Test
+    void searchOnlyAsksForTheKindsTheActorMayRead() {
+        when(events.searchByKind(any(), anyCollection(), anyCollection(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        service.search(null, null, 0, 20, TestActors.actor("o", Role.ORGANIZADOR));
+        service.search(null, null, 0, 20, TestActors.actor("c", Role.COORDINADOR));
+
+        verify(events).searchByKind(any(), anyCollection(), eq(Set.of(true)), any(Pageable.class));
+        verify(events).searchByKind(any(), anyCollection(), eq(Set.of(false)), any(Pageable.class));
+    }
+
+    @Test
+    void searchWithoutAnyReadPermissionReturnsAnEmptyPageWithoutAskingTheDatabase() {
+        PageResponse<EventSummaryResponse> page =
+                service.search(null, null, 0, 20, TestActors.actor("a", Role.ADMIN));
+
+        assertTrue(page.content().isEmpty());
+        verify(events, never()).searchByKind(any(), anyCollection(), anyCollection(), any(Pageable.class));
+    }
+
+    @Test
+    void detailIsDeniedWhenTheActorCannotReadThatKindOfEvent() {
+        when(events.findById(running.getId())).thenReturn(Optional.of(running));
+
+        assertThrows(AccessDeniedException.class,
+                () -> service.detail(running.getId(), TestActors.actor("c", Role.COORDINADOR)));
+    }
+
+    @Test
     void searchEscapesTheTextAndAsksForAllStatusesByDefault() {
-        when(events.search(any(), anyCollection(), any(Pageable.class)))
+        when(events.searchByKind(any(), anyCollection(), anyCollection(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(running)));
 
-        PageResponse<EventSummaryResponse> page = service.search("  100%_Drill! ", null, 0, 20);
+        PageResponse<EventSummaryResponse> page = service.search("  100%_Drill! ", null, 0, 20, reader);
 
         ArgumentCaptor<String> pattern = ArgumentCaptor.forClass(String.class);
-        verify(events).search(pattern.capture(), eq(EnumSet.allOf(EventStatus.class)), any(Pageable.class));
+        verify(events).searchByKind(
+                pattern.capture(), eq(EnumSet.allOf(EventStatus.class)), eq(Set.of(true, false)), any(Pageable.class));
         assertEquals("%100!%!_drill!!%", pattern.getValue());
         assertEquals(1, page.content().size());
         assertEquals("Running drill", page.content().get(0).name());
@@ -146,21 +181,22 @@ class EventQueryServiceTest {
 
     @Test
     void searchWithAStatusAndNoTextKeepsOnlyThatStatus() {
-        when(events.search(any(), anyCollection(), any(Pageable.class)))
+        when(events.searchByKind(any(), anyCollection(), anyCollection(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
 
-        PageResponse<EventSummaryResponse> page = service.search(" ", EventStatus.FINISHED, 0, 10);
+        PageResponse<EventSummaryResponse> page = service.search(" ", EventStatus.FINISHED, 0, 10, reader);
 
-        verify(events).search(eq("%"), eq(Set.of(EventStatus.FINISHED)), any(Pageable.class));
+        verify(events).searchByKind(
+                eq("%"), eq(Set.of(EventStatus.FINISHED)), eq(Set.of(true, false)), any(Pageable.class));
         assertTrue(page.content().isEmpty());
         assertEquals(0, page.totalElements());
     }
 
     @Test
     void searchRejectsAWrongPageOrSize() {
-        assertThrows(InvalidFieldException.class, () -> service.search(null, null, -1, 20));
-        assertThrows(InvalidFieldException.class, () -> service.search(null, null, 0, 0));
-        assertThrows(InvalidFieldException.class, () -> service.search(null, null, 0, 101));
+        assertThrows(InvalidFieldException.class, () -> service.search(null, null, -1, 20, reader));
+        assertThrows(InvalidFieldException.class, () -> service.search(null, null, 0, 0, reader));
+        assertThrows(InvalidFieldException.class, () -> service.search(null, null, 0, 101, reader));
     }
 
     // ---- detail ----
@@ -174,7 +210,7 @@ class EventQueryServiceTest {
                 brigadier("b3", "Bob", "z1", BrigadierStatus.INACTIVE, NOW.minusSeconds(30)),
                 brigadier("b4", "Eva", null, BrigadierStatus.ACTIVE, NOW)));
 
-        EventDetailResponse detail = service.detail(running.getId());
+        EventDetailResponse detail = service.detail(running.getId(), reader);
 
         assertEquals(4, detail.monitoring().checkIn().totalCheckins());
         assertEquals(3, detail.monitoring().incidents().totalIncidents());
@@ -192,7 +228,7 @@ class EventQueryServiceTest {
     void emptyIndicatorsExplainThatNothingIsRegisteredYet() {
         indicators(0, 0);
 
-        EventDetailResponse detail = service.detail(running.getId());
+        EventDetailResponse detail = service.detail(running.getId(), reader);
 
         assertEquals(List.of("NO_CHECKINS", "NO_INCIDENTS", "NO_BRIGADIERS"), codes(detail));
         assertNull(detail.monitoring().brigadiersSyncedAt());
@@ -207,7 +243,7 @@ class EventQueryServiceTest {
         when(brigadiers.findByEventId(running.getId()))
                 .thenReturn(List.of(brigadier("b1", "Ana", "z1", BrigadierStatus.ACTIVE, NOW)));
 
-        EventDetailResponse detail = service.detail(running.getId());
+        EventDetailResponse detail = service.detail(running.getId(), reader);
 
         assertNull(detail.monitoring().checkIn());
         assertNotNull(detail.monitoring().incidents());
@@ -223,7 +259,7 @@ class EventQueryServiceTest {
         when(brigadiers.findByEventId(running.getId()))
                 .thenReturn(List.of(brigadier("b1", "Ana", "z1", BrigadierStatus.ACTIVE, NOW.minusSeconds(300))));
 
-        EventDetailResponse detail = service.detail(running.getId());
+        EventDetailResponse detail = service.detail(running.getId(), reader);
 
         assertNull(detail.monitoring().incidents());
         assertTrue(detail.monitoring().checkIn().byStatus().isEmpty());
@@ -238,7 +274,7 @@ class EventQueryServiceTest {
                 finished.getId(), NOW, true, false, 5, new BigDecimal("80.00"), Map.of(), 1, 1, 1, 60L, List.of());
         when(evaluation.find(finished.getId())).thenReturn(Optional.of(saved));
 
-        EventDetailResponse detail = service.detail(finished.getId());
+        EventDetailResponse detail = service.detail(finished.getId(), reader);
 
         assertNull(detail.monitoring());
         assertEquals(saved, detail.evaluation());
@@ -249,7 +285,7 @@ class EventQueryServiceTest {
     void aDraftHasNeitherMonitoringNorEvaluation() {
         EventEntity draft = event("Draft", EventStatus.DRAFT, false);
 
-        EventDetailResponse detail = service.detail(draft.getId());
+        EventDetailResponse detail = service.detail(draft.getId(), reader);
 
         assertNull(detail.monitoring());
         assertNull(detail.evaluation());
@@ -261,7 +297,7 @@ class EventQueryServiceTest {
         UUID id = UUID.randomUUID();
         when(events.findById(id)).thenReturn(Optional.empty());
 
-        assertThrows(ResourceNotFoundException.class, () -> service.detail(id));
+        assertThrows(ResourceNotFoundException.class, () -> service.detail(id, reader));
     }
 
     // ---- active ----
@@ -274,10 +310,10 @@ class EventQueryServiceTest {
         when(events.findByStatusOrderByStartedAtDesc(EventStatus.IN_PROGRESS))
                 .thenReturn(List.of(running, real, forStudents));
 
-        List<EventSummaryResponse> student = service.active(new AccessActor("s", Set.of(Role.ESTUDIANTE)));
-        List<EventSummaryResponse> organizer = service.active(new AccessActor("o", Set.of(Role.ORGANIZADOR)));
-        List<EventSummaryResponse> coordinator = service.active(new AccessActor("c", Set.of(Role.COORDINADOR)));
-        List<EventSummaryResponse> auditor = service.active(new AccessActor("a", Set.of(Role.AUDITOR)));
+        List<EventSummaryResponse> student = service.active(TestActors.actor("s", Role.ESTUDIANTE));
+        List<EventSummaryResponse> organizer = service.active(TestActors.actor("o", Role.ORGANIZADOR));
+        List<EventSummaryResponse> coordinator = service.active(TestActors.actor("c", Role.COORDINADOR));
+        List<EventSummaryResponse> auditor = service.active(TestActors.actor("a", Role.AUDITOR));
 
         assertEquals(List.of("For students"), student.stream().map(EventSummaryResponse::name).toList());
         assertEquals(List.of("Running drill"), organizer.stream().map(EventSummaryResponse::name).toList());

@@ -27,6 +27,7 @@ import edu.escuelaing.campusseguro.events.repository.EventRepository;
 import edu.escuelaing.campusseguro.events.repository.EventScopeItemRepository;
 import edu.escuelaing.campusseguro.events.security.AccessActor;
 import edu.escuelaing.campusseguro.events.security.EventAccessPolicy;
+import edu.escuelaing.campusseguro.events.security.Permission;
 import edu.escuelaing.campusseguro.events.security.Role;
 import edu.escuelaing.campusseguro.events.service.EventEvaluationService;
 import edu.escuelaing.campusseguro.events.service.EventQueryService;
@@ -35,6 +36,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -100,7 +102,8 @@ public class EventQueryServiceImpl implements EventQueryService {
     }
 
     @Override
-    public PageResponse<EventSummaryResponse> search(String title, EventStatus status, int page, int size) {
+    public PageResponse<EventSummaryResponse> search(
+            String title, EventStatus status, int page, int size, AccessActor actor) {
         if (page < 0) {
             throw new InvalidFieldException("page", "The page number cannot be negative");
         }
@@ -108,19 +111,31 @@ public class EventQueryServiceImpl implements EventQueryService {
             throw new InvalidFieldException("size", "The page size must be between 1 and " + MAX_PAGE_SIZE);
         }
         Collection<EventStatus> statuses = status == null ? EnumSet.allOf(EventStatus.class) : Set.of(status);
+        // true = drills, false = real events; the actor only sees the kinds it has the read permission for.
+        Set<Boolean> kinds = new HashSet<>();
+        if (accessPolicy.can(actor, true, Permission.Action.READ)) {
+            kinds.add(true);
+        }
+        if (accessPolicy.can(actor, false, Permission.Action.READ)) {
+            kinds.add(false);
+        }
+        if (kinds.isEmpty()) {
+            return new PageResponse<>(List.of(), page, size, 0, 0);
+        }
         PageRequest request = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         return tx.execute(state -> {
-            Page<EventEntity> found = events.search(likePattern(title), statuses, request);
+            Page<EventEntity> found = events.searchByKind(likePattern(title), statuses, kinds, request);
             List<EventSummaryResponse> content = found.getContent().stream().map(this::summary).toList();
             return new PageResponse<>(content, page, size, found.getTotalElements(), found.getTotalPages());
         });
     }
 
     @Override
-    public EventDetailResponse detail(UUID eventId) {
+    public EventDetailResponse detail(UUID eventId, AccessActor actor) {
         Detail base = tx.execute(state -> {
             EventEntity event = events.findById(eventId)
                     .orElseThrow(() -> new ResourceNotFoundException("Event not found: " + eventId));
+            accessPolicy.assertCan(actor, event.isSimulacro(), Permission.Action.READ, "read");
             List<ScopeRef> scope = scope(eventId);
             Set<Role> roles = roles(eventId);
             EventResponse response = mapper.toResponse(

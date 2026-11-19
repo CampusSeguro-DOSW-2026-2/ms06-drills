@@ -28,10 +28,10 @@ import edu.escuelaing.campusseguro.events.repository.EventStartFailureRepository
 import edu.escuelaing.campusseguro.events.security.AccessActor;
 import edu.escuelaing.campusseguro.events.security.EventAccessPolicy;
 import edu.escuelaing.campusseguro.events.security.Role;
+import edu.escuelaing.campusseguro.events.security.TestActors;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,8 +49,8 @@ class EventPanelServiceTest {
     private final EventPanelServiceImpl service =
             new EventPanelServiceImpl(events, scopeItems, failures, campus, new EventAccessPolicy());
 
-    private final AccessActor student = new AccessActor("s-1", Set.of(Role.ESTUDIANTE));
-    private final AccessActor organizer = new AccessActor("o-1", Set.of(Role.ORGANIZADOR));
+    private final AccessActor student = TestActors.actor("s-1", Role.ESTUDIANTE);
+    private final AccessActor organizer = TestActors.actor("o-1", Role.ORGANIZADOR);
     private EventEntity event;
 
     @BeforeEach
