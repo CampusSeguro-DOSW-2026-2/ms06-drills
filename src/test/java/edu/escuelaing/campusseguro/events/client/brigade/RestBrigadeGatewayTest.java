@@ -35,18 +35,18 @@ class RestBrigadeGatewayTest extends WireMockTestBase {
 
     private RestBrigadeGateway gateway() {
         return new RestBrigadeGateway(
-                factory, baseUrl(), "service-key-with-at-least-32-characters", "", "SERVICE_MS06",
+                factory, baseUrl(), "service-key-with-at-least-32-characters",
                 STATE, BRIGADIERS, INDICATORS);
     }
 
     @Test
     void requiresTheServiceKey() {
         assertThrows(IllegalStateException.class, () -> new RestBrigadeGateway(
-                factory, baseUrl(), " ", "", "SERVICE_MS06", STATE, BRIGADIERS, INDICATORS));
+                factory, baseUrl(), " ", STATE, BRIGADIERS, INDICATORS));
     }
 
     @Test
-    void everyCallCarriesTheServiceHeadersAndTheMs06Role() {
+    void everyCallCarriesOnlyTheServiceHeaders() {
         String path = "/api/v1/bei/eventos/" + eventId + "/brigadistas";
         server.stubFor(get(urlEqualTo(path)).willReturn(aResponse().withStatus(200)
                 .withHeader("Content-Type", "application/json")
@@ -57,24 +57,24 @@ class RestBrigadeGatewayTest extends WireMockTestBase {
         server.verify(getRequestedFor(urlEqualTo(path))
                 .withHeader("X-Service-Key", equalTo("service-key-with-at-least-32-characters"))
                 .withHeader("X-Service-Name", equalTo("MS06"))
-                .withHeader("X-User-Role", equalTo("SERVICE_MS06"))
-                .withHeader("X-User-Id", equalTo("ms06-service"))
+                .withoutHeader("X-User-Id")
+                .withoutHeader("X-User-Role")
+                .withoutHeader("X-User-Permission")
                 .withHeader("X-Correlation-ID", matching(".+"))
                 .withoutHeader("Authorization"));
     }
 
     @Test
-    void theSystemUserIdIsUsedWhenConfigured() {
+    void theStatePushSendsNoUserIdentity() {
         String path = "/api/v1/bei/eventos/" + eventId + "/estado";
-        String systemUser = "b256f8d8-e1ab-451b-ac4b-06cf67defb25";
         server.stubFor(put(urlEqualTo(path)).willReturn(aResponse().withStatus(204)));
 
-        new RestBrigadeGateway(
-                        factory, baseUrl(), "service-key-with-at-least-32-characters", systemUser,
-                        "SERVICE_MS06", STATE, BRIGADIERS, INDICATORS)
-                .pushState(payload(false));
+        gateway().pushState(payload(false));
 
-        server.verify(putRequestedFor(urlEqualTo(path)).withHeader("X-User-Id", equalTo(systemUser)));
+        // MS05 authorizes these routes by the calling service; the Gateway rejects a partial identity
+        server.verify(putRequestedFor(urlEqualTo(path))
+                .withoutHeader("X-User-Id")
+                .withoutHeader("X-User-Role"));
     }
 
     private EventStatePayload payload(boolean drill) {

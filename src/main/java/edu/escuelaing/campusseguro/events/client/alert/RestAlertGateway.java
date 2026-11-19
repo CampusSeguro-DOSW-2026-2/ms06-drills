@@ -8,6 +8,7 @@ import edu.escuelaing.campusseguro.events.entity.enums.ScopeType;
 import edu.escuelaing.campusseguro.events.exception.ExternalServiceUnavailableException;
 import edu.escuelaing.campusseguro.events.security.IdentityHeaders;
 import edu.escuelaing.campusseguro.events.security.Role;
+import edu.escuelaing.campusseguro.events.security.UserPermissions;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -42,6 +43,7 @@ public class RestAlertGateway implements AlertGateway {
     private final String serviceKey;
     private final String systemUserId;
     private final String systemUserRole;
+    private final String systemUserPermissions;
     private final String alertsPath;
     private final String reschedulePath;
     private final String archivePath;
@@ -56,7 +58,9 @@ public class RestAlertGateway implements AlertGateway {
             @Value("${app.gateway.alerts-path:/api/v1/alertas}") String alertsPath,
             @Value("${app.gateway.reschedule-path:/api/v1/alertas/{id}/programar}") String reschedulePath,
             @Value("${app.gateway.archive-path:/api/v1/alertas/{id}/archivar}") String archivePath,
-            @Value("${app.gateway.activate-path:/api/v1/alertas/{id}/activar}") String activatePath) {
+            @Value("${app.gateway.activate-path:/api/v1/alertas/{id}/activar}") String activatePath,
+            @Value("${app.gateway.system-user-permissions:" + UserPermissions.DEFAULT_SYSTEM_PERMISSIONS + "}")
+                    String systemUserPermissions) {
         if (serviceKey == null || serviceKey.isBlank()) {
             throw new IllegalStateException(
                     "app.gateway.service-key is required (GATEWAY_SERVICE_KEY)");
@@ -69,6 +73,7 @@ public class RestAlertGateway implements AlertGateway {
         this.reschedulePath = reschedulePath;
         this.archivePath = archivePath;
         this.activatePath = activatePath;
+        this.systemUserPermissions = systemUserPermissions;
     }
 
     @Override
@@ -120,6 +125,8 @@ public class RestAlertGateway implements AlertGateway {
         headers.set(CorrelationIds.HEADER, CorrelationIds.current());
         headers.set(IdentityHeaders.USER_ID, resolved.userId());
         headers.set(IdentityHeaders.USER_ROLE, resolved.roles());
+        headers.set(IdentityHeaders.USER_PERMISSION,
+                UserPermissions.forActor(resolved.userId(), systemUserPermissions));
     }
 
     private ResolvedActor resolve(AlertActor actor) {

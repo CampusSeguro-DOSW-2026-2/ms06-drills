@@ -43,7 +43,7 @@ class RestCheckInGatewayTest extends WireMockTestBase {
 
     private RestCheckInGateway gateway(String key, String systemUser) {
         return new RestCheckInGateway(
-                factory, baseUrl(), key, systemUser, "ORGANIZADOR", STATE, CONSOLIDATED, CHECKINS);
+                factory, baseUrl(), key, systemUser, "ORGANIZADOR", STATE, CONSOLIDATED, CHECKINS, "ms04:dashboard:read");
     }
 
     private EventStatePayload payload(EventStatus status) {
@@ -124,7 +124,8 @@ class RestCheckInGatewayTest extends WireMockTestBase {
         server.verify(getRequestedFor(urlEqualTo(path))
                 .withHeader("X-Service-Key", equalTo(KEY))
                 .withHeader("X-User-Id", equalTo(SYSTEM_USER))
-                .withHeader("X-User-Role", equalTo("ORGANIZADOR")));
+                .withHeader("X-User-Role", equalTo("ORGANIZADOR"))
+                .withHeader("X-User-Permission", equalTo("ms04:dashboard:read")));
     }
 
     @Test

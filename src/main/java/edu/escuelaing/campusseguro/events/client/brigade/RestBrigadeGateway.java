@@ -22,9 +22,9 @@ import org.springframework.web.client.RestClient;
  * Real {@link BrigadeGateway}. Every call goes through the API Gateway with the MS06 service key
  * ({@code X-Service-Key}), never directly to MS05.
  *
- * <p>MS05 only accepts these internal routes for the role {@code SERVICE_MS06}, and its filter also
- * needs a user id, so each call sends {@code X-User-Role: SERVICE_MS06} and a technical user id
- * (the configured system user, or {@code ms06-service} when none is set).
+ * <p>MS05 authorizes these internal routes by the calling service ({@code X-Service-Name: ms06}, which
+ * the Gateway derives from the key). No user identity is sent: the Gateway rejects a partial one, and
+ * MS05 does not need it here.
  */
 @Component
 @Profile("!local & !test")
@@ -32,12 +32,9 @@ public class RestBrigadeGateway implements BrigadeGateway {
 
     private static final String SERVICE = "MS05";
     private static final String SERVICE_NAME = "MS06";
-    private static final String FALLBACK_USER_ID = "ms06-service";
 
     private final RestClient client;
     private final String serviceKey;
-    private final String userId;
-    private final String serviceRole;
     private final String statePath;
     private final String brigadiersPath;
     private final String indicatorsPath;
@@ -46,8 +43,6 @@ public class RestBrigadeGateway implements BrigadeGateway {
             RestClientFactory factory,
             @Value("${app.gateway.url:http://localhost:8080}") String baseUrl,
             @Value("${app.gateway.service-key:}") String serviceKey,
-            @Value("${app.gateway.system-user-id:}") String systemUserId,
-            @Value("${app.gateway.ms05-service-role:SERVICE_MS06}") String serviceRole,
             @Value("${app.clients.ms05.state-path:/api/v1/bei/eventos/{eventId}/estado}") String statePath,
             @Value("${app.clients.ms05.brigadiers-path:/api/v1/bei/eventos/{eventId}/brigadistas}")
                     String brigadiersPath,
@@ -59,8 +54,6 @@ public class RestBrigadeGateway implements BrigadeGateway {
         }
         this.client = factory.createGateway(baseUrl);
         this.serviceKey = serviceKey.strip();
-        this.userId = systemUserId == null || systemUserId.isBlank() ? FALLBACK_USER_ID : systemUserId.strip();
-        this.serviceRole = serviceRole == null || serviceRole.isBlank() ? "SERVICE_MS06" : serviceRole.strip();
         this.statePath = statePath;
         this.brigadiersPath = brigadiersPath;
         this.indicatorsPath = indicatorsPath;
@@ -70,8 +63,6 @@ public class RestBrigadeGateway implements BrigadeGateway {
         headers.set(IdentityHeaders.SERVICE_KEY, serviceKey);
         headers.set(IdentityHeaders.SERVICE_NAME, SERVICE_NAME);
         headers.set(CorrelationIds.HEADER, CorrelationIds.current());
-        headers.set(IdentityHeaders.USER_ID, userId);
-        headers.set(IdentityHeaders.USER_ROLE, serviceRole);
     }
 
     @Override
