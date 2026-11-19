@@ -93,6 +93,8 @@ paths:
       tags:
       - Alert types
       summary: List the active and alert-eligible types for MS03
+      description: Internal catalog for MS03. The Gateway authenticates it with X-Service-Name
+        ms03; it is not a user endpoint.
       operationId: listAlertTypes
       responses:
         "200":

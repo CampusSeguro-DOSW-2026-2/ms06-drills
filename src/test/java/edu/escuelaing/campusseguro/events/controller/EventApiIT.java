@@ -145,8 +145,8 @@ class EventApiIT extends PostgresIntegrationTest {
     }
 
     @Test
-    void theAlertTypeCatalogListsOnlyTheEligibleTypes() throws Exception {
-        mvc.perform(get("/api/v1/tipos-alerta").with(as("AUDITOR")))
+    void theAlertTypeCatalogListsOnlyTheEligibleTypesForMs03() throws Exception {
+        mvc.perform(get("/api/v1/tipos-alerta").header("X-Service-Name", "ms03"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.code=='SISMO')]").isNotEmpty())
                 .andExpect(jsonPath("$[?(@.code=='FUGA_QUIMICA')]").isNotEmpty())
@@ -155,8 +155,10 @@ class EventApiIT extends PostgresIntegrationTest {
     }
 
     @Test
-    void aStudentCannotReadTheAlertTypeCatalog() throws Exception {
-        mvc.perform(get("/api/v1/tipos-alerta").with(as("ESTUDIANTE"))).andExpect(status().isForbidden());
+    void theAlertTypeCatalogRejectsRequestsWithoutTheMs03Service() throws Exception {
+        mvc.perform(get("/api/v1/tipos-alerta")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/tipos-alerta").header("X-Service-Name", "ms04"))
+                .andExpect(status().isForbidden());
     }
 
     @Test

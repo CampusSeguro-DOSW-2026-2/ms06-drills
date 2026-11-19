@@ -260,10 +260,10 @@ OpenAPI openAPI() {
 | GET | `/eventos/{id}/panel` | Panel del evento en ejecución (rutas, check-in, incidentes) | Sí: cualquier usuario autenticado | 200, 401, 404, 409 |
 | PATCH | `/eventos/{id}/finalizar` | Finalizar un evento y evaluarlo | Sí: COORDINADOR, ORGANIZADOR | 200, 401, 403, 404, 409, 503 |
 | GET | `/tipos-evento` | Listar los tipos de evento activos | Sí: COORDINADOR, ORGANIZADOR, ADMIN, AUDITOR | 200, 401, 403 |
-| GET | `/tipos-alerta` | Listar los tipos de alerta activos y elegibles para MS03 (sin `SIMULACRO`) | Sí: COORDINADOR, ORGANIZADOR, ADMIN, AUDITOR | 200, 401, 403 |
+| GET | `/tipos-alerta` | Listar los tipos de alerta activos y elegibles para MS03 (sin `SIMULACRO`) | Interna: MS03 (`X-Service-Name: ms03`) | 200, 401, 403 |
 | POST | `/tipos-evento` | Crear un tipo de evento | Sí: COORDINADOR | 201, 400, 401, 403, 409 |
 
-> **Tipos de alerta:** `GET /api/v1/tipos-alerta` es el catálogo canónico que MS03 replica (`[{ "code": "SISMO", "name": "Sismo" }, ...]`, ordenado por nombre). Los tipos de alerta salen de `event_types` con `alert_eligible = true` y `active = true`; `SIMULACRO` **no** es un tipo de alerta y queda con `alert_eligible = false`. Al crear, editar, activar o finalizar un evento, MS06 envía a MS03 los códigos de este catálogo y, si no queda ninguno, envía `OTRO`. `OPERATIVA` es exclusiva de MS03 y nunca se envía desde MS06.
+> **Tipos de alerta:** `GET /api/v1/tipos-alerta` es el catálogo canónico que MS03 replica (`[{ "code": "SISMO", "name": "Sismo" }, ...]`, ordenado por nombre). Los tipos de alerta salen de `event_types` con `alert_eligible = true` y `active = true`; `SIMULACRO` **no** es un tipo de alerta y queda con `alert_eligible = false`. Al crear, editar, activar o finalizar un evento, MS06 envía a MS03 los códigos de este catálogo y, si no queda ninguno, envía `OTRO`. `OPERATIVA` es exclusiva de MS03 y nunca se envía desde MS06. La consulta es interna: MS03 la hace con su clave de servicio y el Gateway inyecta `X-Service-Name: ms03`; no se acepta un JWT de usuario.
 
 **Ejemplo de petición**
 ```http
@@ -312,6 +312,7 @@ Códigos de error (`ErrorCode`): `VALIDATION_ERROR`, `UNAUTHORIZED`, `FORBIDDEN`
 | `PATCH /api/v1/eventos/{id}/finalizar` | `execute` (del tipo del evento) |
 | `GET /api/v1/eventos`, `GET /api/v1/eventos/{id}` | `read` (solo se devuelven los eventos de los tipos que el usuario puede leer) |
 | `GET /api/v1/tipos-evento` | `read` o `manage` de cualquier tipo |
+| `GET /api/v1/tipos-alerta` | interna: `X-Service-Name: ms03` |
 | `POST /api/v1/tipos-evento` | `ms06:real_event:manage` |
 | `GET /api/v1/eventos/activos`, `GET /api/v1/eventos/{id}/panel` | cualquier usuario autenticado |
 

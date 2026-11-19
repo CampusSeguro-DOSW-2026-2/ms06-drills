@@ -28,10 +28,17 @@ public class AlertTypeController {
         this.service = service;
     }
 
-    /** Active and alert-eligible types, sorted by name, to replicate them in MS03. */
+    /**
+     * Active and alert-eligible types, sorted by name, to replicate them in MS03.
+     *
+     * <p>Internal route: the Gateway authenticates it with {@code X-Service-Name: ms03} from the
+     * service key; it does not use user permissions.
+     */
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ms06:drill:read','ms06:real_event:read','ms06:drill:manage','ms06:real_event:manage')")
-    @Operation(summary = "List the active and alert-eligible types for MS03")
+    @PreAuthorize("hasAuthority('SERVICE_MS03')")
+    @Operation(summary = "List the active and alert-eligible types for MS03",
+            description = "Internal catalog for MS03. The Gateway authenticates it with "
+                    + "X-Service-Name: ms03; it is not a user endpoint.")
     public List<AlertTypeResponse> list() {
         return service.listAlertTypes();
     }
