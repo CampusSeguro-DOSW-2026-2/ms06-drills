@@ -51,7 +51,7 @@ class RestCheckInGatewayTest extends WireMockTestBase {
                 eventId, "Drill", true, status,
                 Instant.parse("2026-12-01T15:00:00Z"), null,
                 List.of(new ScopeRef(ScopeType.BUILDING, "b1"), new ScopeRef(ScopeType.ZONE, "z1")),
-                Set.of(Role.ESTUDIANTE));
+                Set.of("ESTUDIANTE"));
     }
 
     @Test

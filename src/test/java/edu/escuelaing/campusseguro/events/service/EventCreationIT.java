@@ -58,7 +58,7 @@ class EventCreationIT extends PostgresIntegrationTest {
     void draftEventIsSavedWithItsData() {
         CreateEventRequest request = new CreateEventRequest(
                 "Draft IT", null, Set.of(typeId("SISMO")), null,
-                List.of(new ScopeItemRequest(ScopeType.BUILDING, "b1")), Set.of(Role.PROFESOR));
+                List.of(new ScopeItemRequest(ScopeType.BUILDING, "b1")), Set.of("PROFESOR"));
 
         EventResponse response = creation.create(request, coordinator);
 
@@ -76,7 +76,7 @@ class EventCreationIT extends PostgresIntegrationTest {
         Instant start = Instant.now().plus(2, ChronoUnit.DAYS);
         CreateEventRequest request = new CreateEventRequest(
                 "Scheduled IT", "desc", Set.of(typeId("INCENDIO")), start,
-                List.of(new ScopeItemRequest(ScopeType.ZONE, "z1")), Set.of(Role.ESTUDIANTE, Role.PROFESOR));
+                List.of(new ScopeItemRequest(ScopeType.ZONE, "z1")), Set.of("ESTUDIANTE", "PROFESOR"));
 
         EventResponse response = creation.create(request, coordinator);
 

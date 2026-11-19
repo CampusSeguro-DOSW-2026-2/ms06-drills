@@ -3,7 +3,6 @@ package edu.escuelaing.campusseguro.events.dto.response;
 import edu.escuelaing.campusseguro.events.entity.enums.EventAlertPurpose;
 import edu.escuelaing.campusseguro.events.entity.enums.EventStatus;
 import edu.escuelaing.campusseguro.events.entity.enums.ScopeType;
-import edu.escuelaing.campusseguro.events.security.Role;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
@@ -39,7 +38,7 @@ public record EventResponse(
         Instant endedAt,
         List<EventTypeResponse> types,
         List<ScopeItem> scope,
-        Set<Role> participantRoles,
+        Set<String> participantRoles,
         List<AlertLink> alerts,
         String createdBy,
         Instant createdAt,

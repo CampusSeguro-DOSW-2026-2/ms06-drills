@@ -9,7 +9,6 @@ import edu.escuelaing.campusseguro.events.client.alert.AlertTypes;
 import edu.escuelaing.campusseguro.events.client.brigade.BrigadeGateway;
 import edu.escuelaing.campusseguro.events.client.campus.CampusGateway;
 import edu.escuelaing.campusseguro.events.client.checkin.CheckInGateway;
-import edu.escuelaing.campusseguro.events.client.identity.IdentityGateway;
 import edu.escuelaing.campusseguro.events.dto.request.CreateEventRequest;
 import edu.escuelaing.campusseguro.events.dto.request.ScopeItemRequest;
 import edu.escuelaing.campusseguro.events.dto.response.EventResponse;
@@ -37,7 +36,7 @@ import edu.escuelaing.campusseguro.events.repository.EventScopeItemRepository;
 import edu.escuelaing.campusseguro.events.repository.EventTypeRepository;
 import edu.escuelaing.campusseguro.events.security.AccessActor;
 import edu.escuelaing.campusseguro.events.security.EventAccessPolicy;
-import edu.escuelaing.campusseguro.events.security.Role;
+import edu.escuelaing.campusseguro.events.security.RoleNames;
 import edu.escuelaing.campusseguro.events.service.AuditService;
 import edu.escuelaing.campusseguro.events.service.EventLifecycleService;
 import edu.escuelaing.campusseguro.events.service.EventStateService;
@@ -48,7 +47,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
-import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -82,7 +80,6 @@ public class EventUpdateServiceImpl implements EventUpdateService {
     private final EventParticipantRepository participants;
     private final EventAlertRepository alertLinks;
     private final CampusGateway campus;
-    private final IdentityGateway identity;
     private final EventLifecycleService lifecycle;
     private final EventStateService stateService;
     private final AuditService audit;
@@ -100,7 +97,6 @@ public class EventUpdateServiceImpl implements EventUpdateService {
             EventParticipantRepository participants,
             EventAlertRepository alertLinks,
             CampusGateway campus,
-            IdentityGateway identity,
             EventLifecycleService lifecycle,
             EventStateService stateService,
             AuditService audit,
@@ -116,7 +112,6 @@ public class EventUpdateServiceImpl implements EventUpdateService {
         this.participants = participants;
         this.alertLinks = alertLinks;
         this.campus = campus;
-        this.identity = identity;
         this.lifecycle = lifecycle;
         this.stateService = stateService;
         this.audit = audit;
@@ -132,19 +127,12 @@ public class EventUpdateServiceImpl implements EventUpdateService {
     private record Edit(
             EventEntity event,
             List<ScopeRef> scope,
-            Set<Role> roles,
+            Set<String> roles,
             EventStatePayload before,
             Instant oldStart,
             boolean changed,
             List<EventWarning> warnings,
-            String actor,
-            Set<Role> actorRoles,
-            Set<String> actorPermissions) {
-
-        /** Actor for scheduling and alerts, with the same roles and permissions as the request. */
-        AccessActor accessActor() {
-            return new AccessActor(actor, actorRoles, actorPermissions);
-        }
+            AccessActor actor) {
     }
 
     @Override
@@ -167,9 +155,9 @@ public class EventUpdateServiceImpl implements EventUpdateService {
 
         List<EventWarning> warnings = new ArrayList<>();
         List<ScopeRef> oldScope = currentScope(eventId);
-        Set<Role> oldRoles = currentRoles(eventId);
+        Set<String> oldRoles = currentRoles(eventId);
         List<ScopeRef> scope = validatedScope(request.scope(), warnings).orElse(oldScope);
-        Set<Role> roles = validatedRoles(request.participantRoles(), warnings).orElse(oldRoles);
+        Set<String> roles = validatedRoles(request.participantRoles()).orElse(oldRoles);
         if (status == EventStatus.IN_PROGRESS && (scope.isEmpty() || roles.isEmpty())) {
             throw new InvalidFieldException(scope.isEmpty() ? "scope" : "participantRoles",
                     "A started event must keep its scope and its participants");
@@ -181,9 +169,7 @@ public class EventUpdateServiceImpl implements EventUpdateService {
                 event.getScheduledStart(),
                 hasChanges(event, request, types, oldScope, scope, oldRoles, roles),
                 warnings,
-                actor.auditId(),
-                actor.roles(),
-                actor.permissions());
+                actor);
         if (edit.changed()) {
             audit.record(AuditRecordType.MODIFICATION, "EVENT_UPDATED", actor.auditId(), event, "Event edited");
         }
@@ -202,7 +188,7 @@ public class EventUpdateServiceImpl implements EventUpdateService {
         apply(edit, request, types);
         if (isComplete(edit)) {
             SchedulingOutcome outcome = lifecycle.schedule(
-                    edit.event(), edit.scope(), edit.roles(), edit.accessActor());
+                    edit.event(), edit.scope(), edit.roles(), edit.actor());
             edit.warnings().addAll(outcome.warnings());
         }
         return respond(edit);
@@ -269,7 +255,7 @@ public class EventUpdateServiceImpl implements EventUpdateService {
             throw ex;
         }
         alertLinks.deleteAll(general);
-        stateService.transition(event.getId(), EventStatus.DRAFT, edit.actor(), "Edited: data incomplete, back to draft");
+        stateService.transition(event.getId(), EventStatus.DRAFT, edit.actor().auditId(), "Edited: data incomplete, back to draft");
     }
 
     // ----------------------------------------------------------- In progress
@@ -361,30 +347,24 @@ public class EventUpdateServiceImpl implements EventUpdateService {
     }
 
     /**
-     * Validates the roles: only community roles can be invited.
-     * Empty result: AUT is down, a warning is added and the caller keeps the current roles.
+     * Validates the names of the invited roles with the format of the standards. MS01 keeps the roles as data, so any
+     * well-formed name is accepted; MS01 checks that the role exists when it resolves the users.
      */
-    private Optional<Set<Role>> validatedRoles(Set<Role> requested, List<EventWarning> warnings) {
+    private Optional<Set<String>> validatedRoles(Set<String> requested) {
         if (requested == null || requested.isEmpty()) {
             return Optional.of(Set.of());
         }
-        List<String> notInvitable = requested.stream()
-                .filter(role -> !role.isCommunity())
-                .map(Role::name)
+        List<String> invalid = requested.stream()
+                .map(RoleNames::normalize)
+                .filter(name -> !RoleNames.hasStoredFormat(name))
                 .sorted()
                 .toList();
-        if (!notInvitable.isEmpty()) {
-            throw new InvalidReferenceException("participantRoles", notInvitable);
+        if (!invalid.isEmpty()) {
+            throw new InvalidReferenceException("participantRoles", invalid);
         }
-        Set<Role> roles = EnumSet.copyOf(requested);
-        try {
-            identity.validateRoles(roles);
-        } catch (ExternalServiceUnavailableException ex) {
-            warnings.add(new EventWarning("PARTICIPANTS_PENDING",
-                    "AUT is unavailable: the participant changes were not saved. Send them again later."));
-            return Optional.empty();
-        }
-        return Optional.of(roles);
+        return Optional.of(requested.stream()
+                .map(RoleNames::normalize)
+                .collect(Collectors.toCollection(java.util.TreeSet::new)));
     }
 
     private boolean isComplete(Edit edit) {
@@ -393,7 +373,7 @@ public class EventUpdateServiceImpl implements EventUpdateService {
 
     private boolean hasChanges(
             EventEntity event, CreateEventRequest request, Set<EventTypeEntity> types,
-            List<ScopeRef> oldScope, List<ScopeRef> scope, Set<Role> oldRoles, Set<Role> roles) {
+            List<ScopeRef> oldScope, List<ScopeRef> scope, Set<String> oldRoles, Set<String> roles) {
         Set<UUID> oldTypeIds = event.getTypes().stream().map(EventTypeEntity::getId).collect(Collectors.toSet());
         Set<UUID> newTypeIds = types.stream().map(EventTypeEntity::getId).collect(Collectors.toSet());
         return !Objects.equals(event.getName(), request.name().strip())
@@ -439,9 +419,9 @@ public class EventUpdateServiceImpl implements EventUpdateService {
         }).toList());
     }
 
-    private void syncRoles(UUID eventId, Set<Role> wanted) {
+    private void syncRoles(UUID eventId, Set<String> wanted) {
         List<EventParticipantEntity> stored = participants.findByEventId(eventId);
-        Set<Role> storedRoles = stored.stream().map(EventParticipantEntity::getRole).collect(Collectors.toSet());
+        Set<String> storedRoles = stored.stream().map(EventParticipantEntity::getRole).collect(Collectors.toSet());
         participants.deleteAll(stored.stream().filter(item -> !wanted.contains(item.getRole())).toList());
         participants.saveAll(wanted.stream().filter(role -> !storedRoles.contains(role)).map(role -> {
             EventParticipantEntity item = new EventParticipantEntity();
@@ -457,10 +437,10 @@ public class EventUpdateServiceImpl implements EventUpdateService {
                 .toList();
     }
 
-    private Set<Role> currentRoles(UUID eventId) {
-        Set<Role> roles = participants.findByEventId(eventId).stream()
+    private Set<String> currentRoles(UUID eventId) {
+        Set<String> roles = participants.findByEventId(eventId).stream()
                 .map(EventParticipantEntity::getRole)
-                .collect(Collectors.toCollection(() -> EnumSet.noneOf(Role.class)));
+                .collect(Collectors.toCollection(java.util.TreeSet::new));
         return Collections.unmodifiableSet(roles);
     }
 
@@ -470,7 +450,7 @@ public class EventUpdateServiceImpl implements EventUpdateService {
                 event, edit.scope(), edit.roles(), alertLinks.findByEventId(event.getId()), edit.warnings());
     }
 
-    private EventStatePayload payload(EventEntity event, EventStatus status, List<ScopeRef> scope, Set<Role> roles) {
+    private EventStatePayload payload(EventEntity event, EventStatus status, List<ScopeRef> scope, Set<String> roles) {
         return new EventStatePayload(
                 event.getId(), event.getName(), event.isSimulacro(), status,
                 event.getScheduledStart(), event.getEndedAt(), scope, roles);
@@ -486,7 +466,7 @@ public class EventUpdateServiceImpl implements EventUpdateService {
     }
 
     private AlertActor alertActor(Edit edit) {
-        return AlertActor.from(edit.accessActor());
+        return AlertActor.from(edit.actor());
     }
 
     /** Alert for brigadiers: check the assignment after the changes. It is sent right away. */
@@ -494,7 +474,7 @@ public class EventUpdateServiceImpl implements EventUpdateService {
         return new AlertCommand(
                 event.getId(), EventAlertPurpose.EDIT, event.isSimulacro(),
                 BRIGADIERS_TITLE + event.getName(), BRIGADIERS_TEXT,
-                edit.scope(), Set.of(Role.BRIGADISTA), null, true,
+                edit.scope(), Set.of("BRIGADISTA"), null, true,
                 AlertTypes.from(event.getTypes()));
     }
 

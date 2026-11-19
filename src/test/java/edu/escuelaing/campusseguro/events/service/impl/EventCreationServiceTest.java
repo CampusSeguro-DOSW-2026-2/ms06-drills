@@ -1,7 +1,6 @@
 package edu.escuelaing.campusseguro.events.service.impl;
 
 import edu.escuelaing.campusseguro.events.client.campus.CampusGateway;
-import edu.escuelaing.campusseguro.events.client.identity.IdentityGateway;
 import edu.escuelaing.campusseguro.events.dto.request.CreateEventRequest;
 import edu.escuelaing.campusseguro.events.dto.request.ScopeItemRequest;
 import edu.escuelaing.campusseguro.events.dto.response.EventResponse;
@@ -63,9 +62,8 @@ class EventCreationServiceTest {
     private final EventStateService stateService = mock(EventStateService.class);
     private final EventLifecycleService lifecycle = mock(EventLifecycleService.class);
     private final CampusGateway campus = mock(CampusGateway.class);
-    private final IdentityGateway identity = mock(IdentityGateway.class);
     private final EventCreationServiceImpl service = new EventCreationServiceImpl(
-            events, eventTypes, scopeItems, participants, stateService, lifecycle, campus, identity,
+            events, eventTypes, scopeItems, participants, stateService, lifecycle, campus,
             new EventAccessPolicy(), new EventMapper(), Clock.fixed(NOW, ZoneOffset.UTC));
 
     private final AccessActor coordinator = TestActors.actor("coord-1", Role.COORDINADOR);
@@ -100,7 +98,7 @@ class EventCreationServiceTest {
                 .thenReturn(new SchedulingOutcome(true, List.of(), List.of()));
     }
 
-    private CreateEventRequest request(Set<UUID> typeIds, Instant start, List<ScopeItemRequest> scope, Set<Role> roles) {
+    private CreateEventRequest request(Set<UUID> typeIds, Instant start, List<ScopeItemRequest> scope, Set<String> roles) {
         return new CreateEventRequest("  Evacuation  ", "desc", typeIds, start, scope, roles);
     }
 
@@ -124,16 +122,15 @@ class EventCreationServiceTest {
 
     @Test
     void triesToScheduleWhenDateScopeAndRolesAreComplete() {
-        service.create(request(Set.of(sismo.getId()), FUTURE, zone(), Set.of(Role.ESTUDIANTE)), coordinator);
+        service.create(request(Set.of(sismo.getId()), FUTURE, zone(), Set.of("ESTUDIANTE")), coordinator);
 
         verify(lifecycle).schedule(any(EventEntity.class), any(), any(), any());
         verify(campus).validateScope(ScopeType.ZONE, List.of("z1"));
-        verify(identity).validateRoles(Set.of(Role.ESTUDIANTE));
     }
 
     @Test
     void doesNotScheduleWithoutScope() {
-        service.create(request(Set.of(sismo.getId()), FUTURE, null, Set.of(Role.ESTUDIANTE)), coordinator);
+        service.create(request(Set.of(sismo.getId()), FUTURE, null, Set.of("ESTUDIANTE")), coordinator);
 
         verify(lifecycle, never()).schedule(any(), any(), any(), any());
     }
@@ -151,7 +148,7 @@ class EventCreationServiceTest {
                 false, List.of(new edu.escuelaing.campusseguro.events.dto.response.EventWarning("SAVED_AS_DRAFT", "x")), List.of()));
 
         EventResponse response = service.create(
-                request(Set.of(sismo.getId()), FUTURE, zone(), Set.of(Role.ESTUDIANTE)), coordinator);
+                request(Set.of(sismo.getId()), FUTURE, zone(), Set.of("ESTUDIANTE")), coordinator);
 
         assertEquals(EventStatus.DRAFT, response.status());
         assertEquals("SAVED_AS_DRAFT", response.warnings().get(0).code());
@@ -220,12 +217,12 @@ class EventCreationServiceTest {
     }
 
     @Test
-    void rolesOutsideTheCommunityCannotBeInvited() {
+    void rejectsRoleNamesWithAnInvalidFormat() {
         InvalidReferenceException ex = assertThrows(InvalidReferenceException.class, () -> service.create(
-                request(Set.of(sismo.getId()), null, null, Set.of(Role.ESTUDIANTE, Role.ADMIN)), coordinator));
+                request(Set.of(sismo.getId()), null, null, Set.of("ESTUDIANTE", "admin general")), coordinator));
 
         assertEquals("participantRoles", ex.field());
-        assertEquals(List.of("ADMIN"), ex.invalidIds());
+        assertEquals(List.of("ADMIN GENERAL"), ex.invalidIds());
     }
 
     @Test
@@ -243,7 +240,7 @@ class EventCreationServiceTest {
                 .when(campus).validateScope(any(), any());
 
         EventResponse response = service.create(
-                request(Set.of(sismo.getId()), FUTURE, zone(), Set.of(Role.ESTUDIANTE)), coordinator);
+                request(Set.of(sismo.getId()), FUTURE, zone(), Set.of("ESTUDIANTE")), coordinator);
 
         assertEquals(EventStatus.DRAFT, response.status());
         assertTrue(response.scope().isEmpty());
@@ -252,17 +249,12 @@ class EventCreationServiceTest {
     }
 
     @Test
-    void identityDownLeavesTheParticipantsPendingAndTheEventInDraft() {
-        doThrow(new ExternalServiceUnavailableException("MS01", new RuntimeException()))
-                .when(identity).validateRoles(any());
-
+    void acceptsARoleThatMs01Created() {
+        // MS01 keeps the roles as data: a role MS06 does not know is still a valid participant
         EventResponse response = service.create(
-                request(Set.of(sismo.getId()), FUTURE, zone(), Set.of(Role.ESTUDIANTE)), coordinator);
+                request(Set.of(sismo.getId()), null, null, Set.of("SEGURIDAD")), coordinator);
 
-        assertEquals(EventStatus.DRAFT, response.status());
-        assertTrue(response.participantRoles().isEmpty());
-        assertEquals("PARTICIPANTS_PENDING", response.warnings().get(0).code());
-        verify(lifecycle, never()).schedule(any(), any(), any(), any());
+        assertEquals(Set.of("SEGURIDAD"), response.participantRoles());
     }
 
     @Test
@@ -271,7 +263,7 @@ class EventCreationServiceTest {
                 .thenThrow(new ExternalServiceUnavailableException("MS04", new RuntimeException()));
 
         assertThrows(ExternalServiceUnavailableException.class, () -> service.create(
-                request(Set.of(sismo.getId()), FUTURE, zone(), Set.of(Role.ESTUDIANTE)), coordinator));
+                request(Set.of(sismo.getId()), FUTURE, zone(), Set.of("ESTUDIANTE")), coordinator));
     }
 
     @Test

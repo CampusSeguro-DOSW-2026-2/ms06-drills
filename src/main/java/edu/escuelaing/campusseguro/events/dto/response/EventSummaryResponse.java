@@ -1,7 +1,6 @@
 package edu.escuelaing.campusseguro.events.dto.response;
 
 import edu.escuelaing.campusseguro.events.entity.enums.EventStatus;
-import edu.escuelaing.campusseguro.events.security.Role;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
@@ -32,6 +31,6 @@ public record EventSummaryResponse(
         Instant endedAt,
         List<String> types,
         List<EventResponse.ScopeItem> scope,
-        Set<Role> participantRoles,
+        Set<String> participantRoles,
         String createdBy) {
 }

@@ -81,7 +81,7 @@ class RestBrigadeGatewayTest extends WireMockTestBase {
         return new EventStatePayload(
                 eventId, "Event", drill, EventStatus.IN_PROGRESS,
                 Instant.parse("2026-12-01T15:00:00Z"), null,
-                List.of(new ScopeRef(ScopeType.ZONE, "z1")), Set.of(Role.BRIGADISTA));
+                List.of(new ScopeRef(ScopeType.ZONE, "z1")), Set.of("BRIGADISTA"));
     }
 
     @Test

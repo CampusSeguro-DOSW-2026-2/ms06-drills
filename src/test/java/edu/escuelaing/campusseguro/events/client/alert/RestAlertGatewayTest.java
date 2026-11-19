@@ -31,7 +31,7 @@ class RestAlertGatewayTest extends WireMockTestBase {
     private static final String ACTIVATE = "/api/v1/alertas/{id}/activar";
     private static final AlertActor ACTOR = new AlertActor(
             "11111111-1111-4111-8111-111111111111",
-            Set.of(Role.ESTUDIANTE));
+            Set.of("ESTUDIANTE"));
 
     private RestAlertGateway gateway() {
         return new RestAlertGateway(
@@ -55,7 +55,7 @@ class RestAlertGatewayTest extends WireMockTestBase {
                 "Drill",
                 "Go to the meeting point",
                 List.of(new ScopeRef(ScopeType.BUILDING, "b1"), new ScopeRef(ScopeType.ZONE, "z1")),
-                Set.of(Role.ESTUDIANTE),
+                Set.of("ESTUDIANTE"),
                 Instant.parse("2026-12-01T15:00:00Z"),
                 false,
                 List.of("OTHER"));

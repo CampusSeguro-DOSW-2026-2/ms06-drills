@@ -8,7 +8,6 @@ import edu.escuelaing.campusseguro.events.dto.response.EventWarning;
 import edu.escuelaing.campusseguro.events.entity.EventAlertEntity;
 import edu.escuelaing.campusseguro.events.entity.EventEntity;
 import edu.escuelaing.campusseguro.events.entity.EventTypeEntity;
-import edu.escuelaing.campusseguro.events.security.Role;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
@@ -31,7 +30,7 @@ public class EventMapper {
     public EventResponse toResponse(
             EventEntity event,
             List<ScopeRef> scope,
-            Set<Role> roles,
+            Set<String> roles,
             List<EventAlertEntity> alerts,
             List<EventWarning> warnings) {
 
@@ -70,7 +69,7 @@ public class EventMapper {
      * @param scope its scope
      * @param roles its invited roles
      */
-    public EventSummaryResponse toSummary(EventEntity event, List<ScopeRef> scope, Set<Role> roles) {
+    public EventSummaryResponse toSummary(EventEntity event, List<ScopeRef> scope, Set<String> roles) {
         List<String> types = event.getTypes().stream()
                 .map(EventTypeEntity::getName)
                 .sorted()

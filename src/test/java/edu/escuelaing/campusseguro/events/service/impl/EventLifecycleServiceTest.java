@@ -98,7 +98,7 @@ class EventLifecycleServiceTest {
             Clock.fixed(NOW, ZoneOffset.UTC), new EventAccessPolicy(), evaluation, brigadierSync);
 
     private final List<ScopeRef> scope = List.of(new ScopeRef(ScopeType.ZONE, "z1"));
-    private final Set<Role> roles = Set.of(Role.ESTUDIANTE);
+    private final Set<String> roles = Set.of("ESTUDIANTE");
     private EventEntity event;
 
     private static ExternalServiceUnavailableException down(String service) {
@@ -147,7 +147,7 @@ class EventLifecycleServiceTest {
         assertEquals(EventAlertPurpose.BRIGADISTS, brigadiers.purpose());
         assertTrue(brigadiers.activateImmediately());
         assertNull(brigadiers.activationAt());
-        assertEquals(Set.of(Role.BRIGADISTA), brigadiers.recipientRoles());
+        assertEquals(Set.of("BRIGADISTA"), brigadiers.recipientRoles());
         assertTrue(brigadiers.simulacro());
 
         assertEquals(EventAlertPurpose.GENERAL, general.purpose());
@@ -282,7 +282,7 @@ class EventLifecycleServiceTest {
         item.setScopeRefId("z1");
         when(scopeItems.findByEventId(target.getId())).thenReturn(List.of(item));
         EventParticipantEntity participant = new EventParticipantEntity();
-        participant.setRole(Role.ESTUDIANTE);
+        participant.setRole("ESTUDIANTE");
         when(participants.findByEventId(target.getId())).thenReturn(List.of(participant));
         EventAlertEntity link = new EventAlertEntity();
         link.setAlertId(alertId);
@@ -303,7 +303,7 @@ class EventLifecycleServiceTest {
         verify(checkIn).pushState(chi.capture());
         assertEquals(EventStatus.IN_PROGRESS, chi.getValue().status());
         assertEquals(List.of(new ScopeRef(ScopeType.ZONE, "z1")), chi.getValue().scope());
-        assertEquals(Set.of(Role.ESTUDIANTE), chi.getValue().invitedRoles());
+        assertEquals(Set.of("ESTUDIANTE"), chi.getValue().invitedRoles());
         verify(brigade).pushState(any(EventStatePayload.class));
         verify(alerts).activate(eq("alert-9"), any(AlertActor.class));
         verify(failures, never()).save(any());
@@ -539,7 +539,7 @@ class EventLifecycleServiceTest {
         assertEquals(EventAlertPurpose.FINISH, command.purpose());
         assertTrue(command.activateImmediately());
         assertNull(command.activationAt());
-        assertEquals(Set.of(Role.ESTUDIANTE), command.recipientRoles());
+        assertEquals(Set.of("ESTUDIANTE"), command.recipientRoles());
         ArgumentCaptor<EventAlertEntity> link = ArgumentCaptor.forClass(EventAlertEntity.class);
         verify(alertLinks).save(link.capture());
         assertEquals(EventAlertPurpose.FINISH, link.getValue().getPurpose());

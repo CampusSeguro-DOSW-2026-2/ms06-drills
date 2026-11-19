@@ -170,7 +170,7 @@ public class RestCheckInGateway implements CheckInGateway {
                 StatusLabels.of(payload.status()),
                 startDate,
                 new Stage(ids(payload, ScopeType.BUILDING), ids(payload, ScopeType.ZONE)),
-                payload.invitedRoles().stream().map(Role::name).sorted().toList());
+                payload.invitedRoles().stream().sorted().toList());
     }
 
     private List<String> ids(EventStatePayload payload, ScopeType type) {

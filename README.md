@@ -106,7 +106,7 @@
 | RN-02 | Un evento tiene nombre (máx. 150 caracteres), descripción opcional (máx. 1000) y de 1 a 4 tipos de evento activos. |
 | RN-03 | La fecha de inicio debe ser futura al crear o programar. En un evento en ejecución no se puede cambiar. |
 | RN-04 | Un evento es simulacro si uno de sus tipos es SIMULACRO. El coordinador gestiona eventos reales y el organizador los simulacros. ADMIN y AUDITOR solo consultan. Un simulacro no puede pasar a ser evento real ni al revés. |
-| RN-05 | Solo los roles de la comunidad pueden ser convocados a un evento. |
+| RN-05 | Un evento convoca roles por su nombre, tal como MS01 los guarda: `GET /api/v1/roles/event-participants` entrega los que reciben alertas (incluidos los que crea o renombra el administrador). El nombre debe tener el formato de los Estándares; MS01 comprueba que exista al resolver los usuarios. |
 | RN-06 | Un evento se programa solo si tiene fecha, alcance (edificios o zonas) y participantes; si falta algo o un módulo no responde, queda como borrador y se avisa con una advertencia. |
 | RN-07 | Pueden existir varios eventos en curso a la vez. |
 | RN-08 | El inicio es automático a la hora programada. Si CHI, BEI o ALE no responden, el evento inicia igual: la falla se guarda y se reintenta hasta lograrlo. |
@@ -136,7 +136,7 @@
 | Exception | Errores de dominio y manejador global (`ErrorResponse`). |
 | Client | Gateways hacia MS01, MS02, MS03, MS04, MS05 y MS08. |
 | Scheduler | Tareas periódicas que delegan en los servicios. |
-| Security | Política de acceso por rol y tipo de evento (`EventAccessPolicy`). |
+| Security | Política de acceso por permiso y tipo de evento (`EventAccessPolicy`). |
 
 **Tecnologías**
 
@@ -155,7 +155,7 @@
 | Servicio | Tipo | Dirección | Para qué |
 |----------|------|-----------|----------|
 | API Gateway / Frontend | REST | Entrada | Peticiones de los usuarios con JWT. |
-| MS01 – Usuarios y autenticación (AUT) | REST | Salida | Validar los roles que se convocan al evento. |
+| MS01 – Usuarios y autenticación (AUT) | REST | Entrada | Entrega a su frontend los roles invitables (`GET /api/v1/roles/event-participants`) para el selector de participantes. |
 | MS02 – Campus (CAM) | REST | Salida | Validar edificios y zonas del alcance y obtener las rutas del panel. |
 | MS03 – Alertas (ALE) | REST | Salida | Crear, reprogramar, volver a borrador y activar las alertas del evento. |
 | MS04 – Check-in (CHI) | REST | Salida | Informar el estado del evento (habilita o deshabilita el check-in) y consultar indicadores y check-ins. |
