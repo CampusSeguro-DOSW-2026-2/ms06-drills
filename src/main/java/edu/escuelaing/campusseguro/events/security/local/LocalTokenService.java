@@ -1,9 +1,11 @@
 package edu.escuelaing.campusseguro.events.security.local;
 
+import edu.escuelaing.campusseguro.events.security.Role;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -27,18 +29,25 @@ public class LocalTokenService {
     private final JwtEncoder jwtEncoder;
     private final Clock clock;
     private final String rolesClaim;
+    private final String permissionsClaim;
 
-    public LocalTokenService(JwtEncoder jwtEncoder, Clock clock, @Value("${app.security.roles-claim:roles}") String rolesClaim) {
+    public LocalTokenService(
+            JwtEncoder jwtEncoder,
+            Clock clock,
+            @Value("${app.security.roles-claim:roles}") String rolesClaim,
+            @Value("${app.security.permissions-claim:permissions}") String permissionsClaim) {
         this.jwtEncoder = jwtEncoder;
         this.clock = clock;
         this.rolesClaim = rolesClaim;
+        this.permissionsClaim = permissionsClaim;
     }
 
     /**
      * Creates a signed token.
      *
      * @param subject user identifier (goes in the {@code sub} claim)
-     * @param roles   role names for the roles claim; can be empty
+     * @param roles   role names for the roles claim; can be empty. The permissions claim gets the
+     *                MS06 permissions of those roles ({@link LocalPermissions})
      * @return the compact token, ready for the {@code Authorization: Bearer} header
      */
     public String generate(String subject, List<String> roles) {
@@ -49,8 +58,18 @@ public class LocalTokenService {
                 .issuedAt(now)
                 .expiresAt(now.plus(TOKEN_TTL))
                 .claim(rolesClaim, roles)
+                .claim(permissionsClaim, permissionsOf(roles))
                 .build();
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
         return jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+    }
+
+    private List<String> permissionsOf(List<String> roles) {
+        return roles.stream()
+                .map(Role::fromClaim)
+                .flatMap(Optional::stream)
+                .flatMap(role -> LocalPermissions.of(role).stream())
+                .distinct()
+                .toList();
     }
 }

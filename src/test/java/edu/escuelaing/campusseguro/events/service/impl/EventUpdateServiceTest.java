@@ -34,6 +34,7 @@ import edu.escuelaing.campusseguro.events.repository.EventTypeRepository;
 import edu.escuelaing.campusseguro.events.security.AccessActor;
 import edu.escuelaing.campusseguro.events.security.EventAccessPolicy;
 import edu.escuelaing.campusseguro.events.security.Role;
+import edu.escuelaing.campusseguro.events.security.TestActors;
 import edu.escuelaing.campusseguro.events.mapper.EventMapper;
 import edu.escuelaing.campusseguro.events.service.EventLifecycleService;
 import edu.escuelaing.campusseguro.events.service.EventStateService;
@@ -92,8 +93,8 @@ class EventUpdateServiceTest {
             lifecycle, stateService, audit, checkIn, brigade, alerts, new EventAccessPolicy(), new EventMapper(),
             Clock.fixed(NOW, ZoneOffset.UTC));
 
-    private final AccessActor coordinator = new AccessActor("coord-1", Set.of(Role.COORDINADOR));
-    private final AccessActor organizer = new AccessActor("org-1", Set.of(Role.ORGANIZADOR));
+    private final AccessActor coordinator = TestActors.actor("coord-1", Role.COORDINADOR);
+    private final AccessActor organizer = TestActors.actor("org-1", Role.ORGANIZADOR);
     private final UUID id = UUID.randomUUID();
 
     private EventTypeEntity sismo;

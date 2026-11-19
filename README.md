@@ -300,8 +300,19 @@ Códigos de error (`ErrorCode`): `VALIDATION_ERROR`, `UNAUTHORIZED`, `FORBIDDEN`
 
 ## 🔐 7. Seguridad <a id="seguridad"></a>
 
-- **Autenticación:** JWT sin estado (servidor de recursos OAuth2). Los roles se leen del claim `roles` (configurable con `JWT_ROLES_CLAIM`) y se convierten en autoridades `ROLE_<ROL>`. En perfil `local` hay un decodificador HS256 propio y `GET /local/tokens` entrega un token por rol; fuera de `local` se valida el JWT de MS01 con `spring.security.oauth2.resourceserver.jwt.*`.
-- **Autorización:** roles ESTUDIANTE, PROFESOR, ADMINISTRATIVO, BRIGADISTA, COORDINADOR, ORGANIZADOR, ADMIN y AUDITOR (también se aceptan EST, PROF, ADMTV, BRIG, COORD y ORG). El coordinador gestiona eventos reales y el organizador los simulacros; ADMIN y AUDITOR consultan pero no crean, editan ni finalizan.
+- **Autenticación:** detrás del API Gateway, MS06 no recibe el JWT: el Gateway lo valida y envía `X-User-Id`, `X-User-Role` (roles separados por coma) y `X-User-Permission` (permisos efectivos separados por coma). Si el id no es un UUID o faltan los permisos, responde 401. En perfil `local` hay un decodificador HS256 propio y `GET /local/tokens` entrega un token por rol (con los claims `roles` y `permissions`).
+- **Autorización:** por permisos de MS01, no por rol (el administrador puede cambiar los permisos de cada rol). Hay un juego de permisos para simulacros (`ms06:drill:*`) y otro para eventos reales (`ms06:real_event:*`), cada uno con `manage`, `execute`, `evaluate`, `read` y `compare_report`. Asignación inicial: ORGANIZADOR todos los de simulacro, COORDINADOR todos los de evento real, AUDITOR `read` y `compare_report` de ambos; ADMIN no tiene permisos de MS06.
+
+| Endpoint | Permiso |
+|---|---|
+| `POST /api/v1/eventos`, `PUT /api/v1/eventos/{id}` | `manage` (del tipo del evento) |
+| `PATCH /api/v1/eventos/{id}/finalizar` | `execute` (del tipo del evento) |
+| `GET /api/v1/eventos`, `GET /api/v1/eventos/{id}` | `read` (solo se devuelven los eventos de los tipos que el usuario puede leer) |
+| `GET /api/v1/tipos-evento` | `read` o `manage` de cualquier tipo |
+| `POST /api/v1/tipos-evento` | `ms06:real_event:manage` |
+| `GET /api/v1/eventos/activos`, `GET /api/v1/eventos/{id}/panel` | cualquier usuario autenticado |
+
+`evaluate` y `compare_report` ya existen como permisos pero todavía no hay endpoints que los exijan.
 - **Secretos:** variables de entorno; **ninguno en el repositorio**. El archivo `.env` local está en `.gitignore`.
 - **CORS:** orígenes permitidos por `CORS_ALLOWED_ORIGINS` (por defecto `http://localhost:5173`).
 - **Validación de entrada:** Bean Validation en los DTO (nombre obligatorio de máx. 150 caracteres, descripción de máx. 1000, de 1 a 4 tipos) y validaciones de negocio en los servicios; todos los errores usan `ErrorResponse`.
@@ -325,7 +336,8 @@ Códigos de error (`ErrorCode`): `VALIDATION_ERROR`, `UNAUTHORIZED`, `FORBIDDEN`
 | `SERVER_PORT` | No | `8083` | Puerto del servicio |
 | `APP_TIMEZONE` | No | `America/Bogota` | Zona horaria de la aplicación |
 | `CORS_ALLOWED_ORIGINS` | No | `http://localhost:5173` | Orígenes permitidos por CORS |
-| `JWT_ROLES_CLAIM` | No | `roles` | Claim del JWT que trae los roles |
+| `JWT_ROLES_CLAIM` | No | `roles` | Claim del JWT local/test que trae los roles |
+| `JWT_PERMISSIONS_CLAIM` | No | `permissions` | Claim del JWT local/test que trae los permisos |
 | `JWT_LOCAL_SECRET` | No (solo perfil `local`) | `campusseguro-local-secret-key-change-me-0123456789` | Secreto HS256 de los tokens locales; mínimo 32 caracteres |
 | `SERVICE_TOKEN` | No | `<a-long-random-secret>` | Credencial con la que MS06 llama a los otros módulos |
 | `MS01_URL` · `MS02_URL` · `MS03_URL` · `MS04_URL` · `MS05_URL` · `MS08_URL` | No | `http://localhost:8084` | URL base de cada módulo (por defecto 8081, 8082, 8080, 8084, 8085 y 8088) |

@@ -30,7 +30,7 @@ class LocalTokensTest {
 
     private final JwtDecoder decoder = NimbusJwtDecoder.withSecretKey(KEY).macAlgorithm(MacAlgorithm.HS256).build();
     private final LocalTokenService service = new LocalTokenService(
-            new NimbusJwtEncoder(new ImmutableSecret<>(KEY)), Clock.systemUTC(), "roles");
+            new NimbusJwtEncoder(new ImmutableSecret<>(KEY)), Clock.systemUTC(), "roles", "permissions");
 
     @Test
     void serviceIssuesATokenWithSubjectRolesAndEightHoursOfLife() {
@@ -39,6 +39,20 @@ class LocalTokensTest {
         assertEquals("local-admin", jwt.getSubject());
         assertEquals(List.of("ADMIN"), jwt.getClaimAsStringList("roles"));
         assertEquals(Duration.ofHours(8), Duration.between(jwt.getIssuedAt(), jwt.getExpiresAt()));
+    }
+
+    @Test
+    void serviceAddsTheMs06PermissionsOfTheRoles() {
+        Jwt auditor = decoder.decode(service.generate("local-auditor", List.of("AUDITOR")));
+        Jwt organizer = decoder.decode(service.generate("local-organizer", List.of("ORGANIZADOR")));
+        Jwt admin = decoder.decode(service.generate("local-admin", List.of("ADMIN")));
+
+        assertEquals(Set.of("ms06:drill:read", "ms06:real_event:read",
+                        "ms06:drill:compare_report", "ms06:real_event:compare_report"),
+                Set.copyOf(auditor.getClaimAsStringList("permissions")));
+        assertEquals(5, organizer.getClaimAsStringList("permissions").size());
+        assertTrue(organizer.getClaimAsStringList("permissions").stream().allMatch(c -> c.startsWith("ms06:drill:")));
+        assertTrue(admin.getClaimAsStringList("permissions").isEmpty());
     }
 
     @Test

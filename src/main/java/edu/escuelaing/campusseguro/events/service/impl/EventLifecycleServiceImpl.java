@@ -27,6 +27,7 @@ import edu.escuelaing.campusseguro.events.repository.EventScopeItemRepository;
 import edu.escuelaing.campusseguro.events.repository.EventStartFailureRepository;
 import edu.escuelaing.campusseguro.events.security.AccessActor;
 import edu.escuelaing.campusseguro.events.security.EventAccessPolicy;
+import edu.escuelaing.campusseguro.events.security.Permission;
 import edu.escuelaing.campusseguro.events.security.Role;
 import edu.escuelaing.campusseguro.events.service.BrigadierSyncService;
 import edu.escuelaing.campusseguro.events.service.EventEvaluationService;
@@ -189,7 +190,7 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
     private void finishOne(UUID eventId, AccessActor actor, List<EventWarning> warnings) {
         EventEntity event = events.findForUpdate(eventId)
                 .orElseThrow(() -> new ResourceNotFoundException("Event not found: " + eventId));
-        accessPolicy.assertCanManage(actor, event.isSimulacro(), "finish");
+        accessPolicy.assertCan(actor, event.isSimulacro(), Permission.Action.EXECUTE, "finish");
         if (event.getStatus() != EventStatus.IN_PROGRESS) {
             throw new InvalidStateTransitionException(event.getStatus(), EventStatus.FINISHED);
         }
@@ -387,13 +388,17 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
     }
 
     /**
-     * Identity used when the event starts on its own. It is the user who created the event and
-     * the role that authorizes the operation: ORGANIZADOR for drills, COORDINADOR for real events.
+     * Identity used when the event starts on its own. It is the user who created the event, with
+     * the role that sends the alerts (ORGANIZADOR for drills, COORDINADOR for real events) and the
+     * permissions to manage and execute that kind of event.
      */
     private AccessActor automaticActor(EventEntity event) {
         String userId = event.getCreatedBy();
-        Role role = event.isSimulacro() ? Role.ORGANIZADOR : Role.COORDINADOR;
-        return new AccessActor(userId == null ? "" : userId, Set.of(role));
+        boolean simulacro = event.isSimulacro();
+        Role role = simulacro ? Role.ORGANIZADOR : Role.COORDINADOR;
+        return new AccessActor(userId == null ? "" : userId, Set.of(role), Set.of(
+                Permission.code(simulacro, Permission.Action.MANAGE),
+                Permission.code(simulacro, Permission.Action.EXECUTE)));
     }
 
     /** Alert that asks brigadiers to activate and choose a zone. It is sent right away. */

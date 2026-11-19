@@ -45,6 +45,20 @@ public interface EventRepository extends JpaRepository<EventEntity, UUID> {
             @Param("statuses") Collection<EventStatus> statuses,
             Pageable pageable);
 
+    /**
+     * Same as {@link #search} but only for the given kinds of event: {@code true} keeps drills and
+     * {@code false} keeps real events. It is how each user only sees the kinds they may read.
+     *
+     * @param kinds values of the {@code simulacro} column to include (never empty)
+     */
+    @Query("select e from EventEntity e where e.status in :statuses and e.simulacro in :kinds "
+            + "and lower(e.name) like :pattern escape '!'")
+    Page<EventEntity> searchByKind(
+            @Param("pattern") String pattern,
+            @Param("statuses") Collection<EventStatus> statuses,
+            @Param("kinds") Collection<Boolean> kinds,
+            Pageable pageable);
+
     /** Events in the given status, most recently started first (events in progress). */
     List<EventEntity> findByStatusOrderByStartedAtDesc(EventStatus status);
 

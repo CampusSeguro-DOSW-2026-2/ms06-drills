@@ -5,6 +5,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -20,10 +21,13 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * Authenticates a request with the headers the API Gateway injects. MS06 never receives the JWT:
- * the Gateway validates it and forwards {@code X-User-Id} and {@code X-User-Role}.
+ * the Gateway validates it and forwards {@code X-User-Id}, {@code X-User-Role} and
+ * {@code X-User-Permission}.
  *
- * <p>If only one of the two headers arrives, or the id is not a UUID, the request is rejected
- * with the standard 401 response.
+ * <p>The permissions decide what the user may do; the roles are only used to know which events
+ * invite the user. A role that MS06 does not know (MS01 lets the admin create roles) is ignored.
+ * If the user id is not a UUID or the permissions are missing, the request is rejected with the
+ * standard 401 response.
  */
 @Component
 @Profile("!local & !test")
@@ -47,29 +51,38 @@ public class IdentityHeadersAuthenticationFilter extends OncePerRequestFilter {
 
         String userId = request.getHeader(IdentityHeaders.USER_ID);
         String roles = request.getHeader(IdentityHeaders.USER_ROLE);
+        String permissions = request.getHeader(IdentityHeaders.USER_PERMISSION);
 
-        if (isBlank(userId) && isBlank(roles)) {
+        if (isBlank(userId) && isBlank(roles) && isBlank(permissions)) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        if (!isUuid(userId) || isBlank(roles)) {
+        if (!isUuid(userId) || isBlank(permissions)) {
             reject(request, response);
             return;
         }
 
-        List<GrantedAuthority> authorities = Arrays.stream(roles.split(","))
+        List<GrantedAuthority> authorities = new ArrayList<>();
+        if (!isBlank(roles)) {
+            Arrays.stream(roles.split(","))
+                    .map(String::strip)
+                    .filter(value -> !value.isEmpty())
+                    .map(Role::fromClaim)
+                    .flatMap(Optional::stream)
+                    .distinct()
+                    .forEach(role -> authorities.add(new SimpleGrantedAuthority(role.authority())));
+        }
+        List<String> codes = Arrays.stream(permissions.split(","))
                 .map(String::strip)
                 .filter(value -> !value.isEmpty())
-                .map(Role::fromClaim)
-                .flatMap(Optional::stream)
-                .map(role -> (GrantedAuthority) new SimpleGrantedAuthority(role.authority()))
+                .distinct()
                 .toList();
-
-        if (authorities.isEmpty()) {
+        if (codes.isEmpty()) {
             reject(request, response);
             return;
         }
+        codes.forEach(code -> authorities.add(new SimpleGrantedAuthority(code)));
 
         UsernamePasswordAuthenticationToken authentication =
                 UsernamePasswordAuthenticationToken.authenticated(userId, null, authorities);
