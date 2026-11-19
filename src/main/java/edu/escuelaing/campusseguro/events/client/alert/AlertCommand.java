@@ -22,7 +22,7 @@ import java.util.UUID;
  * @param recipientRoles      names of the roles that receive the alert
  * @param activationAt        date to send it (scheduled alert)
  * @param activateImmediately send it now
- * @param alertTypes          MS03 alert types (EARTHQUAKE, FIRE, OTHER, OPERATIVA)
+ * @param alertTypes          MS06 alert type codes (e.g. SISMO, INCENDIO, OTRO); not the legacy EARTHQUAKE/FIRE/OTHER/OPERATIVA text mapping
  */
 public record AlertCommand(
         UUID eventId,
@@ -48,6 +48,6 @@ public record AlertCommand(
             Instant activationAt,
             boolean activateImmediately) {
         this(eventId, purpose, simulacro, title, instructions, scope, recipientRoles,
-                activationAt, activateImmediately, List.of("OTHER"));
+                activationAt, activateImmediately, List.of(AlertTypeCodes.OTHER_CODE));
     }
 }

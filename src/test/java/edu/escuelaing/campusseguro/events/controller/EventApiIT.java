@@ -145,6 +145,21 @@ class EventApiIT extends PostgresIntegrationTest {
     }
 
     @Test
+    void theAlertTypeCatalogListsOnlyTheEligibleTypes() throws Exception {
+        mvc.perform(get("/api/v1/tipos-alerta").with(as("AUDITOR")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.code=='SISMO')]").isNotEmpty())
+                .andExpect(jsonPath("$[?(@.code=='FUGA_QUIMICA')]").isNotEmpty())
+                .andExpect(jsonPath("$[?(@.code=='SIMULACRO')]").isEmpty())
+                .andExpect(jsonPath("$[?(@.code=='OTRO')]").isNotEmpty());
+    }
+
+    @Test
+    void aStudentCannotReadTheAlertTypeCatalog() throws Exception {
+        mvc.perform(get("/api/v1/tipos-alerta").with(as("ESTUDIANTE"))).andExpect(status().isForbidden());
+    }
+
+    @Test
     void onlyTheCoordinatorAddsTypes() throws Exception {
         String name = "Tipo " + UUID.randomUUID().toString().substring(0, 8);
         String json = "{\"name\":\"" + name + "\"}";

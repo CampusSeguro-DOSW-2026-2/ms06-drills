@@ -58,7 +58,7 @@ class RestAlertGatewayTest extends WireMockTestBase {
                 Set.of("ESTUDIANTE"),
                 Instant.parse("2026-12-01T15:00:00Z"),
                 false,
-                List.of("OTHER"));
+                List.of("SISMO"));
     }
 
     @Test
@@ -78,7 +78,7 @@ class RestAlertGatewayTest extends WireMockTestBase {
                 // Without a request of that user, the system user permissions are sent
                 .withHeader("X-User-Permission", equalTo("ms03:alert:manage_drill"))
                 .withHeader("X-Correlation-ID", containing("-"))
-                .withRequestBody(containing("\"types\":[\"OTHER\"]"))
+                .withRequestBody(containing("\"types\":[\"SISMO\"]"))
                 .withRequestBody(containing("\"purpose\":\"GENERAL\""))
                 .withRequestBody(containing("\"origin\":{\"type\":\"SIMULATION\""))
                 .withRequestBody(containing("\"simulationId\":\"22222222-2222-4222-8222-222222222222\""))

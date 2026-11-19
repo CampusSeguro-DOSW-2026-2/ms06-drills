@@ -18,6 +18,9 @@ public interface EventTypeRepository extends JpaRepository<EventTypeEntity, UUID
     /** Active types sorted by name, to show them when creating an event. */
     List<EventTypeEntity> findByActiveTrueOrderByNameAsc();
 
+    /** Active and alert-eligible types sorted by name, to serve the MS03 alert catalog. */
+    List<EventTypeEntity> findByAlertEligibleTrueAndActiveTrueOrderByNameAsc();
+
     /** Types with the given identifiers (to validate those received in a request). */
     List<EventTypeEntity> findByIdIn(Collection<UUID> ids);
 

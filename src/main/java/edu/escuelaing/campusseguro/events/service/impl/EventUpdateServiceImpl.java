@@ -5,7 +5,7 @@ import edu.escuelaing.campusseguro.events.client.ScopeRef;
 import edu.escuelaing.campusseguro.events.client.alert.AlertActor;
 import edu.escuelaing.campusseguro.events.client.alert.AlertCommand;
 import edu.escuelaing.campusseguro.events.client.alert.AlertGateway;
-import edu.escuelaing.campusseguro.events.client.alert.AlertTypes;
+import edu.escuelaing.campusseguro.events.client.alert.AlertTypeCodes;
 import edu.escuelaing.campusseguro.events.client.brigade.BrigadeGateway;
 import edu.escuelaing.campusseguro.events.client.campus.CampusGateway;
 import edu.escuelaing.campusseguro.events.client.checkin.CheckInGateway;
@@ -475,7 +475,7 @@ public class EventUpdateServiceImpl implements EventUpdateService {
                 event.getId(), EventAlertPurpose.EDIT, event.isSimulacro(),
                 BRIGADIERS_TITLE + event.getName(), BRIGADIERS_TEXT,
                 edit.scope(), Set.of("BRIGADISTA"), null, true,
-                AlertTypes.from(event.getTypes()));
+                AlertTypeCodes.from(event.getTypes()));
     }
 
     /** Alert for participants of a started event: the information changed. It is sent right away. */
@@ -484,7 +484,7 @@ public class EventUpdateServiceImpl implements EventUpdateService {
                 event.getId(), EventAlertPurpose.EDIT, event.isSimulacro(),
                 PARTICIPANTS_TITLE + event.getName(), PARTICIPANTS_TEXT,
                 edit.scope(), edit.roles(), null, true,
-                AlertTypes.from(event.getTypes()));
+                AlertTypeCodes.from(event.getTypes()));
     }
 
     /** Runs the undo actions, last one first. A failure is only logged: the original error is the one that matters. */
