@@ -113,7 +113,9 @@
 | RN-09 | Al finalizar: si CHI o BEI no responden, el evento no finaliza (503); si ALE no responde, finaliza con advertencia. |
 | RN-10 | Un evento finalizado no se puede editar. Un evento en ejecución no puede quedar sin alcance ni participantes. |
 | RN-11 | Al finalizar se guarda la evaluación (check-in, incidentes, brigadistas). Si faltan cifras de CHI o BEI se completan después automáticamente. |
-| RN-12 | Cada creación, modificación, cambio de estado y finalización queda en la bandeja de auditoría dentro de la misma transacción; se envía a MS08 después. |
+| RN-12 | Cada creación, modificación, cambio de estado, inicio y finalización queda en la bandeja de auditoría dentro de la misma transacción; se envía a MS08 después, una sola vez por cada cosa que ocurre, con su contrato de ingesta (`POST /api/v1/audit/events` por el Gateway, con la clave de servicio de MS06) y las acciones del catálogo de auditoría. |
+| RN-12b | `EVENT_STARTED` (con `fecha_hora` = `startedAt` y `automatico`) es el punto cero con el que MS08 calcula los tiempos de check-in y evacuación; `EVENT_FINISHED` lleva `fecha_hora` = `endedAt` y `duracion_segundos`; `EVENT_STATUS_CHANGED` lleva `estado_anterior` y `estado_nuevo`. A MS08 no viaja el motivo en texto libre ni datos personales. |
+| RN-12c | Si MS08 responde 400 a un registro, ese registro se cierra con `last_error = REJECTED…` y no bloquea a los demás; ante cualquier otro fallo se reintenta en orden. |
 | RN-13 | Las ediciones simultáneas se controlan con bloqueo (409 si hay modificación concurrente). |
 
 <p align="right"><a href="#indice">⬆ Volver al índice</a></p>
@@ -160,7 +162,7 @@
 | MS03 – Alertas (ALE) | REST | Salida | Crear, reprogramar, volver a borrador y activar las alertas del evento. |
 | MS04 – Check-in (CHI) | REST | Salida | Informar el estado del evento (habilita o deshabilita el check-in) y consultar indicadores y check-ins. |
 | MS05 – Brigadistas e incidentes (BEI) | REST | Salida | Copiar los brigadistas del evento y consultar los indicadores de incidentes. |
-| MS08 – Analítica y auditoría (AYA) | REST | Salida | Enviar los registros de auditoría desde la bandeja local. |
+| MS08 – Analítica y auditoría (AYA) | REST (por el Gateway) | Salida | Enviar los hechos de auditoría desde la bandeja local (`POST /api/v1/audit/events`): `EVENT_CREATED`, `EVENT_UPDATED`, `EVENT_STATUS_CHANGED`, `EVENT_STARTED`, `EVENT_FINISHED` y `EVENT_TYPE_CREATED` (catálogo de auditoría), con `evento_id` y `tipo_evento` (`SIMULACRO` o `REAL`). |
 
 <p align="right"><a href="#indice">⬆ Volver al índice</a></p>
 
@@ -459,4 +461,4 @@ ms06-events/
 
 ---
 
-<p align="center"><strong>Licencia:</strong> uso académico</p>
+<p align="center"><strong>Licencia:</strong> uso académico</p>

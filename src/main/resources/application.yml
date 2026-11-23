@@ -74,6 +74,8 @@ app:
     reschedule-path: ${GATEWAY_ALERTS_RESCHEDULE_PATH:/api/v1/alertas/{id}/programar}
     archive-path: ${GATEWAY_ALERTS_ARCHIVE_PATH:/api/v1/alertas/{id}/archivar}
     activate-path: ${GATEWAY_ALERTS_ACTIVATE_PATH:/api/v1/alertas/{id}/activar}
+    # MS08 audit ingestion (internal route: the MS06 service key must be allowed for it in the Gateway).
+    audit-path: ${GATEWAY_AUDIT_PATH:/api/v1/audit/events}
   clients:
     connect-timeout-ms: 2000
     read-timeout-ms: 2000

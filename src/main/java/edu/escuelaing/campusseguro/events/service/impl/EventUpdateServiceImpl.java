@@ -171,7 +171,7 @@ public class EventUpdateServiceImpl implements EventUpdateService {
                 warnings,
                 actor);
         if (edit.changed()) {
-            audit.record(AuditRecordType.MODIFICATION, "EVENT_UPDATED", actor.auditId(), event, "Event edited");
+            audit.record(AuditRecordType.MODIFICATION, "EVENT_UPDATED", actor.auditId(), event, null);
         }
 
         return switch (status) {
@@ -497,4 +497,4 @@ public class EventUpdateServiceImpl implements EventUpdateService {
             }
         }
     }
-}
+}

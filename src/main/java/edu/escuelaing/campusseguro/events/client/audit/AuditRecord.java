@@ -1,35 +1,38 @@
 package edu.escuelaing.campusseguro.events.client.audit;
 
-import java.time.Instant;
-import java.util.UUID;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.Map;
 
 /**
- * An audit record as MS08 receives it (RF-BEI-06). The contract is a proposal until MS08 confirms it.
+ * An audit fact as MS08 receives it ({@code POST /api/v1/audit/events}, API standards section 12).
+ * Field names are the ones of the MS08 contract; empty fields are not sent.
  *
- * @param idRegistro        record id; MS08 can use it to ignore a record that arrives twice
- * @param tipoRegistro      CREATION, MODIFICATION or FINALIZATION
- * @param usuarioOrigen     user or service that did the action
- * @param accion            action (for example EVENT_CREATED)
- * @param fechaHoraRegistro when the action happened
- * @param evento            event where the action happened; {@code null} if there is none
- * @param recurso           affected resource (for example EVENT:{id})
- * @param resultado         result of the operation
- * @param detalle           short explanation of the change; may be {@code null}
- * @param origen            module that sends the record (always MS06)
+ * @param id              fact id (UUID); MS08 ignores a fact that arrives twice with the same id
+ * @param usuarioId       user that did the action (UUID); {@code null} when the system did it
+ * @param modulo          module that sends the fact (always MS06)
+ * @param accion          action in UPPER_SNAKE_CASE (for example EVENT_STARTED)
+ * @param recursoAfectado affected resource as {@code type:id} (for example evento:{id}); may be {@code null}
+ * @param resultado       EXITO or FALLO (MS08 only counts EXITO in its indicators)
+ * @param fechaHora       when the action happened (ISO 8601)
+ * @param correlationId   correlation id of the request that caused the action
+ * @param detalle         generic code of the change (at most 100 characters, no personal data); may be {@code null}
+ * @param eventoId        event of the fact (UUID); {@code null} if there is none
+ * @param tipoEvento      SIMULACRO or REAL; required by MS08 when {@code eventoId} is sent
+ * @param atributos       extra flat data (snake_case keys, text, number or boolean values); may be {@code null}
  */
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record AuditRecord(
-        UUID idRegistro,
-        String tipoRegistro,
-        String usuarioOrigen,
+        String id,
+        @JsonProperty("usuario_id") String usuarioId,
+        String modulo,
         String accion,
-        Instant fechaHoraRegistro,
-        EventRef evento,
-        String recurso,
+        @JsonProperty("recurso_afectado") String recursoAfectado,
         String resultado,
+        @JsonProperty("fecha_hora") String fechaHora,
+        @JsonProperty("correlation_id") String correlationId,
         String detalle,
-        String origen) {
-
-    /** Event of an audit record. */
-    public record EventRef(UUID id, String nombre) {
-    }
+        @JsonProperty("evento_id") String eventoId,
+        @JsonProperty("tipo_evento") String tipoEvento,
+        Map<String, Object> atributos) {
 }

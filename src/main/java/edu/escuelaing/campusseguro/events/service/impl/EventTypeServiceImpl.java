@@ -8,6 +8,7 @@ import edu.escuelaing.campusseguro.events.exception.BusinessException;
 import edu.escuelaing.campusseguro.events.exception.ErrorCode;
 import edu.escuelaing.campusseguro.events.repository.EventTypeRepository;
 import edu.escuelaing.campusseguro.events.service.EventTypeCodes;
+import edu.escuelaing.campusseguro.events.service.AuditExtras;
 import edu.escuelaing.campusseguro.events.service.AuditService;
 import edu.escuelaing.campusseguro.events.service.EventTypeService;
 import java.util.List;
@@ -54,7 +55,8 @@ public class EventTypeServiceImpl implements EventTypeService {
         type.setActive(true);
         type.setCreatedBy(actor);
         EventTypeEntity saved = types.save(type);
-        audit.record(AuditRecordType.CREATION, "EVENT_TYPE_CREATED", actor, null, "Type " + saved.getName());
+        audit.record(AuditRecordType.CREATION, "EVENT_TYPE_CREATED", actor, null, null,
+                new AuditExtras("tipo_evento:" + saved.getId(), null, null));
         return EventTypeResponse.from(saved);
     }
 }

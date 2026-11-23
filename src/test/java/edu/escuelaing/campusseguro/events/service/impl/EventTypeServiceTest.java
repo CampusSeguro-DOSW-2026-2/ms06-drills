@@ -3,6 +3,7 @@ package edu.escuelaing.campusseguro.events.service.impl;
 import edu.escuelaing.campusseguro.events.dto.response.AlertTypeResponse;
 import edu.escuelaing.campusseguro.events.dto.response.EventTypeResponse;
 import edu.escuelaing.campusseguro.events.entity.enums.AuditRecordType;
+import edu.escuelaing.campusseguro.events.service.AuditExtras;
 import edu.escuelaing.campusseguro.events.service.AuditService;
 import edu.escuelaing.campusseguro.events.entity.EventTypeEntity;
 import edu.escuelaing.campusseguro.events.exception.BusinessException;
@@ -74,7 +75,11 @@ class EventTypeServiceTest {
         assertEquals("Fuga de gas", captor.getValue().getName());
         assertEquals("coord-1", captor.getValue().getCreatedBy());
         assertTrue(created.active());
-        verify(audit).record(AuditRecordType.CREATION, "EVENT_TYPE_CREATED", "coord-1", null, "Type Fuga de gas");
+        ArgumentCaptor<AuditExtras> extras = ArgumentCaptor.forClass(AuditExtras.class);
+        verify(audit).record(org.mockito.ArgumentMatchers.eq(AuditRecordType.CREATION),
+                org.mockito.ArgumentMatchers.eq("EVENT_TYPE_CREATED"), org.mockito.ArgumentMatchers.eq("coord-1"),
+                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(), extras.capture());
+        assertTrue(extras.getValue().resource().startsWith("tipo_evento:"));
     }
 
     @Test

@@ -96,10 +96,11 @@ class AuditOutboxIT extends PostgresIntegrationTest {
         delivery.deliverPending();
 
         List<AuditRecord> sent = auditStub.sent().stream()
-                .filter(record -> record.evento() != null && eventId.equals(record.evento().id())).toList();
-        assertTrue(sent.stream().anyMatch(record -> "CREATION".equals(record.tipoRegistro())
-                && "EVENT_CREATED".equals(record.accion()) && "MS06".equals(record.origen())
-                && "Audited delivery".equals(record.evento().nombre())));
+                .filter(record -> eventId.toString().equals(record.eventoId())).toList();
+        assertTrue(sent.stream().anyMatch(record -> "EVENT_CREATED".equals(record.accion())
+                && "MS06".equals(record.modulo()) && "EXITO".equals(record.resultado())
+                && ("evento:" + eventId).equals(record.recursoAfectado())
+                && record.tipoEvento() != null && record.correlationId() != null));
         assertTrue(rowsOf(eventId).stream().allMatch(row -> row.getSentAt() != null));
     }
 
@@ -128,6 +129,9 @@ class AuditOutboxIT extends PostgresIntegrationTest {
         events.saveAndFlush(event);
         lifecycle.startDueEvents();
 
+        assertTrue(rowsOf(eventId).stream().anyMatch(row -> row.getAction().equals("EVENT_STARTED")),
+                "starting the event leaves the EVENT_STARTED fact that MS08 needs");
+
         lifecycle.finish(eventId, coordinator);
 
         PendingAuditEntity last = rowsOf(eventId).stream()
@@ -136,4 +140,4 @@ class AuditOutboxIT extends PostgresIntegrationTest {
         assertTrue(last.getPayload().contains("FINALIZATION"));
         assertNull(last.getSentAt());
     }
-}
+}

@@ -7,12 +7,16 @@ import edu.escuelaing.campusseguro.events.entity.enums.EventStatus;
 import edu.escuelaing.campusseguro.events.exception.ResourceNotFoundException;
 import edu.escuelaing.campusseguro.events.repository.EventRepository;
 import edu.escuelaing.campusseguro.events.repository.EventStateHistoryRepository;
+import edu.escuelaing.campusseguro.events.service.AuditExtras;
 import edu.escuelaing.campusseguro.events.service.AuditService;
 import edu.escuelaing.campusseguro.events.service.EventStateMachine;
 import edu.escuelaing.campusseguro.events.service.EventStateService;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -62,19 +66,37 @@ public class EventStateServiceImpl implements EventStateService {
 
         EventEntity saved = events.save(event);
         record(eventId, from, target, actor, reason, now);
-        boolean finished = target == EventStatus.FINISHED;
-        audit.record(
-                finished ? AuditRecordType.FINALIZATION : AuditRecordType.MODIFICATION,
-                finished ? "EVENT_FINISHED" : "EVENT_STATUS_CHANGED",
-                actor, saved, from + " -> " + target + (reason == null ? "" : ": " + reason));
+        auditChange(saved, from, target, actor, now);
         return saved;
+    }
+
+    /**
+     * Audits the change as the audit catalog says. The free-text reason is never sent to MS08.
+     * EVENT_STARTED (time = startedAt) is the zero point of the check-in and evacuation times in MS08.
+     */
+    private void auditChange(EventEntity event, EventStatus from, EventStatus target, String actor, Instant now) {
+        if (target == EventStatus.IN_PROGRESS) {
+            audit.record(AuditRecordType.MODIFICATION, "EVENT_STARTED", actor, event, null,
+                    new AuditExtras(null,
+                            Map.of("automatico", EventLifecycleServiceImpl.SYSTEM_ACTOR.equals(actor)), now));
+        } else if (target == EventStatus.FINISHED) {
+            Map<String, Object> attributes = new LinkedHashMap<>();
+            if (event.getStartedAt() != null) {
+                attributes.put("duracion_segundos", Duration.between(event.getStartedAt(), now).getSeconds());
+            }
+            audit.record(AuditRecordType.FINALIZATION, "EVENT_FINISHED", actor, event, null,
+                    new AuditExtras(null, attributes, now));
+        } else {
+            audit.record(AuditRecordType.MODIFICATION, "EVENT_STATUS_CHANGED", actor, event, null,
+                    AuditExtras.attributes(Map.of("estado_anterior", from.name(), "estado_nuevo", target.name())));
+        }
     }
 
     @Override
     @Transactional
     public void recordCreation(EventEntity event, String actor) {
         record(event.getId(), null, event.getStatus(), actor, null, clock.instant());
-        audit.record(AuditRecordType.CREATION, "EVENT_CREATED", actor, event, "Created as " + event.getStatus());
+        audit.record(AuditRecordType.CREATION, "EVENT_CREATED", actor, event, null);
     }
 
     @Override

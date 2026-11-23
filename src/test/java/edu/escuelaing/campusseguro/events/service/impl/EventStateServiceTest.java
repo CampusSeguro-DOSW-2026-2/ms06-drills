@@ -2,6 +2,7 @@ package edu.escuelaing.campusseguro.events.service.impl;
 
 import edu.escuelaing.campusseguro.events.entity.EventEntity;
 import edu.escuelaing.campusseguro.events.entity.enums.AuditRecordType;
+import edu.escuelaing.campusseguro.events.service.AuditExtras;
 import edu.escuelaing.campusseguro.events.service.AuditService;
 import edu.escuelaing.campusseguro.events.entity.EventStateHistoryEntity;
 import edu.escuelaing.campusseguro.events.entity.enums.EventStatus;
@@ -14,6 +15,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -169,18 +171,52 @@ class EventStateServiceTest {
     void aStatusChangeIsAudited() {
         service.transition(id, EventStatus.SCHEDULED, "coord-1", "all data complete");
 
-        verify(audit).record(AuditRecordType.MODIFICATION, "EVENT_STATUS_CHANGED", "coord-1", event,
-                "DRAFT -> SCHEDULED: all data complete");
+        verify(audit).record(AuditRecordType.MODIFICATION, "EVENT_STATUS_CHANGED", "coord-1", event, null,
+                AuditExtras.attributes(Map.of("estado_anterior", "DRAFT", "estado_nuevo", "SCHEDULED")));
+    }
+
+    @Test
+    void startingIsAuditedAsEventStartedWithoutTheFreeTextReason() {
+        event.setStatus(EventStatus.SCHEDULED);
+
+        service.transition(id, EventStatus.IN_PROGRESS, "system", "scheduled start reached");
+
+        verify(audit).record(AuditRecordType.MODIFICATION, "EVENT_STARTED", "system", event, null,
+                new AuditExtras(null, Map.of("automatico", true), NOW));
+        verify(audit, never()).record(any(), org.mockito.ArgumentMatchers.eq("EVENT_STATUS_CHANGED"),
+                any(), any(), any(), any());
+    }
+
+    @Test
+    void startingByAUserIsNotAutomatic() {
+        event.setStatus(EventStatus.SCHEDULED);
+
+        service.transition(id, EventStatus.IN_PROGRESS, "coord-1", null);
+
+        verify(audit).record(AuditRecordType.MODIFICATION, "EVENT_STARTED", "coord-1", event, null,
+                new AuditExtras(null, Map.of("automatico", false), NOW));
     }
 
     @Test
     void finishingIsAuditedAsFinalization() {
         event.setStatus(EventStatus.IN_PROGRESS);
+        event.setStartedAt(NOW.minusSeconds(600));
 
         service.transition(id, EventStatus.FINISHED, "coord-1", "Finished by the user");
 
-        verify(audit).record(AuditRecordType.FINALIZATION, "EVENT_FINISHED", "coord-1", event,
-                "IN_PROGRESS -> FINISHED: Finished by the user");
+        verify(audit).record(AuditRecordType.FINALIZATION, "EVENT_FINISHED", "coord-1", event, null,
+                new AuditExtras(null, Map.of("duracion_segundos", 600L), NOW));
+    }
+
+    @Test
+    void finishingWithoutAStartTimeLeavesTheDurationOut() {
+        event.setStatus(EventStatus.IN_PROGRESS);
+        event.setStartedAt(null);
+
+        service.transition(id, EventStatus.FINISHED, "coord-1", null);
+
+        verify(audit).record(AuditRecordType.FINALIZATION, "EVENT_FINISHED", "coord-1", event, null,
+                new AuditExtras(null, Map.of(), NOW));
     }
 
     @Test
@@ -189,12 +225,13 @@ class EventStateServiceTest {
                 () -> service.transition(id, EventStatus.FINISHED, "coord-1", "skip"));
 
         verify(audit, never()).record(any(), any(), any(), any(), any());
+        verify(audit, never()).record(any(), any(), any(), any(), any(), any());
     }
 
     @Test
     void theCreationIsAudited() {
         service.recordCreation(event, "coord-1");
 
-        verify(audit).record(AuditRecordType.CREATION, "EVENT_CREATED", "coord-1", event, "Created as DRAFT");
+        verify(audit).record(AuditRecordType.CREATION, "EVENT_CREATED", "coord-1", event, null);
     }
 }
