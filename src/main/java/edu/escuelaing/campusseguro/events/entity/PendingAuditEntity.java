@@ -35,7 +35,7 @@ public class PendingAuditEntity extends BaseEntity {
     @Column(name = "event_id")
     private UUID eventId;
 
-    /** Action data in JSON. */
+    /** Action data in JSON (kind, resource, result, correlation id, kind of event, detail). */
     @Column(name = "payload", columnDefinition = "text")
     private String payload;
 
@@ -51,7 +51,10 @@ public class PendingAuditEntity extends BaseEntity {
     @Column(name = "last_error", length = 500)
     private String lastError;
 
-    /** Delivery time to MS08; empty while pending. */
+    /**
+     * Delivery time to MS08; empty while pending. It is also set when MS08 rejects the record with 400
+     * (then {@code last_error} starts with REJECTED) so the record does not block the queue.
+     */
     @Column(name = "sent_at")
     private Instant sentAt;
 

@@ -224,7 +224,7 @@ class EventUpdateServiceTest {
         assertEquals(EventStatus.DRAFT, response.status());
         verify(events).save(event);
         verify(lifecycle, never()).schedule(any(), any(), any(), any());
-        verify(audit).record(AuditRecordType.MODIFICATION, "EVENT_UPDATED", "coord-1", event, "Event edited");
+        verify(audit).record(AuditRecordType.MODIFICATION, "EVENT_UPDATED", "coord-1", event, null);
     }
 
     @Test
