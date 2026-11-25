@@ -16,10 +16,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -35,6 +38,8 @@ import org.springframework.web.client.RestClient;
 @Component
 @Profile("!local & !test")
 public class RestAlertGateway implements AlertGateway {
+
+    private static final Logger log = LoggerFactory.getLogger(RestAlertGateway.class);
 
     private static final String SERVICE = "MS03";
 
@@ -109,13 +114,26 @@ public class RestAlertGateway implements AlertGateway {
                 .toBodilessEntity());
     }
 
+    /**
+     * Activates the alert. ALE answers 409 when the alert no longer accepts the change, usually because it already
+     * activated itself at its scheduled time: repeating the call can never succeed, so it is not reported as an
+     * outage (that would retry it forever).
+     */
     @Override
     public void activate(String alertId, AlertActor actor) {
-        ExternalCalls.run(SERVICE, () -> client.patch()
-                .uri(activatePath, alertId)
-                .headers(headers -> addHeaders(headers, actor))
-                .retrieve()
-                .toBodilessEntity());
+        try {
+            ExternalCalls.run(SERVICE, () -> client.patch()
+                    .uri(activatePath, alertId)
+                    .headers(headers -> addHeaders(headers, actor))
+                    .retrieve()
+                    .toBodilessEntity());
+        } catch (ExternalServiceUnavailableException ex) {
+            if (ex.getCause() instanceof HttpClientErrorException.Conflict) {
+                log.info("ALE did not activate alert {} because it is already active or closed: nothing to retry", alertId);
+                return;
+            }
+            throw ex;
+        }
     }
 
     private void addHeaders(HttpHeaders headers, AlertActor actor) {

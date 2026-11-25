@@ -22,9 +22,13 @@ import java.util.stream.Collectors;
  */
 public final class UserPermissions {
 
-    /** Permissions MS06 needs on other services when it acts as its system user. */
+    /**
+     * Permissions MS06 needs on other services when it acts as its system user. {@code ms04:history:read} lets MS04
+     * answer with the whole event: with {@code ms04:dashboard:read} alone it is treated as a brigadier.
+     */
     public static final String DEFAULT_SYSTEM_PERMISSIONS =
-            "ms02:campus:read,ms02:route:read,ms03:alert:manage,ms03:alert:manage_drill,ms04:dashboard:read";
+            "ms02:campus:read,ms02:route:read,ms03:alert:manage,ms03:alert:manage_drill,ms04:dashboard:read,"
+                    + "ms04:history:read";
 
     /** Same format the Gateway accepts: {@code msNN:resource:action}. */
     private static final Pattern FORMAT = Pattern.compile("^ms[0-9]{2}:[a-z][a-z0-9_]*:[a-z][a-z0-9_]*$");

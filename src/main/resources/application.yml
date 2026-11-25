@@ -69,7 +69,8 @@ app:
     system-user-role: ${GATEWAY_SYSTEM_USER_ROLE:ORGANIZADOR}
     # Permissions (X-User-Permission) of the system user. The Gateway requires them with X-User-Id and
     # X-User-Role; calls made for the user of the current request forward that user's permissions instead.
-    system-user-permissions: ${GATEWAY_SYSTEM_USER_PERMISSIONS:ms02:campus:read,ms02:route:read,ms03:alert:manage,ms03:alert:manage_drill,ms04:dashboard:read}
+    # ms04:history:read: without it MS04 treats this identity as a brigadier and asks MS05 for its zones (503).
+    system-user-permissions: ${GATEWAY_SYSTEM_USER_PERMISSIONS:ms02:campus:read,ms02:route:read,ms03:alert:manage,ms03:alert:manage_drill,ms04:dashboard:read,ms04:history:read}
     alerts-path: ${GATEWAY_ALERTS_PATH:/api/v1/alertas}
     reschedule-path: ${GATEWAY_ALERTS_RESCHEDULE_PATH:/api/v1/alertas/{id}/programar}
     archive-path: ${GATEWAY_ALERTS_ARCHIVE_PATH:/api/v1/alertas/{id}/archivar}
