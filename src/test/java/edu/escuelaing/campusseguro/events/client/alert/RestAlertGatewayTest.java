@@ -9,6 +9,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import edu.escuelaing.campusseguro.events.client.ScopeRef;
@@ -163,6 +164,15 @@ class RestAlertGatewayTest extends WireMockTestBase {
 
         assertThrows(ExternalServiceUnavailableException.class,
                 () -> gateway().activate("alert-1", ACTOR));
+    }
+
+    @Test
+    void anAlertAlreadyActiveIsNotRetried() {
+        server.stubFor(patch(urlEqualTo("/api/v1/alertas/alert-1/activar"))
+                .willReturn(aResponse().withStatus(409).withHeader("Content-Type", "application/json")
+                        .withBody("{\"status\":409,\"codigo\":\"TRANSICION_INVALIDA\"}")));
+
+        assertDoesNotThrow(() -> gateway().activate("alert-1", ACTOR));
     }
 
     @Test
