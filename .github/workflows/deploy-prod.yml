@@ -26,6 +26,8 @@ jobs:
 
       - name: Desplegar
         env:
+          DB_URL: ${{ vars.DB_URL }}
+          DB_USER: ${{ vars.DB_USER }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           GATEWAY_URL: ${{ vars.GATEWAY_URL }}
           GATEWAY_SERVICE_KEY: ${{ secrets.GATEWAY_SERVICE_KEY }}

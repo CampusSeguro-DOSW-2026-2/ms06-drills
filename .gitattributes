@@ -1,2 +1,8 @@
 # Shell scripts must keep Unix line endings: they run on the Linux VM.
 *.sh text eol=lf
+
+# Workflows and compose files: LF, so `run: |` blocks never reach the runner with CR.
+*.yml text eol=lf
+*.yaml text eol=lf
+infra/*.yml text eol=lf
+infra/*.yaml text eol=lf
