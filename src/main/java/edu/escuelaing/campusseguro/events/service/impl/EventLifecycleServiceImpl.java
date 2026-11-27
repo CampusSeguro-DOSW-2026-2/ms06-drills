@@ -135,6 +135,7 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
             links.add(createAlert(event, brigadiersAlert(event, scope), actor));
             links.add(createAlert(event, generalAlert(event, scope, roles), actor));
         } catch (ExternalServiceUnavailableException ex) {
+            log.warn("ALE did not accept the alert of event {}: it stays as draft", event.getId(), ex);
             links.forEach(link -> bestEffort(
                     () -> alerts.archive(link.getAlertId(), AlertActor.from(actor))));
             bestEffort(() -> checkIn.pushState(draft));
