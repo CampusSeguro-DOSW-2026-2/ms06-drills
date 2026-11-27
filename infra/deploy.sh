@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Deploys MS06 on this VM.  Usage: bash infra/deploy.sh test|prod
+# Deploys MS06 on this VM (the database is an external RDS instance, not part of the stack).
+# Usage: bash infra/deploy.sh test|prod
 # Required variables (the GitHub workflow sets them from the Environment):
-#   DB_PASSWORD, GATEWAY_URL, GATEWAY_SERVICE_KEY
+#   DB_URL, DB_USER, DB_PASSWORD, GATEWAY_URL, GATEWAY_SERVICE_KEY
 # Optional: GATEWAY_SYSTEM_USER_ID, SCHEDULING_ENABLED (default false)
 set -euo pipefail
 
@@ -10,7 +11,7 @@ if [[ "$ENV_NAME" != "test" && "$ENV_NAME" != "prod" ]]; then
   echo "Usage: bash infra/deploy.sh test|prod" >&2
   exit 1
 fi
-for var in DB_PASSWORD GATEWAY_URL GATEWAY_SERVICE_KEY; do
+for var in DB_URL DB_USER DB_PASSWORD GATEWAY_URL GATEWAY_SERVICE_KEY; do
   if [[ -z "${!var:-}" ]]; then
     echo "Missing variable: $var" >&2
     exit 1
@@ -26,7 +27,9 @@ if ! docker network inspect campus-edge >/dev/null 2>&1; then
   exit 1
 fi
 
-docker compose -p "ms06-$ENV" -f docker-compose.prod.yml up -d --build
+# --remove-orphans drops the old in-stack PostgreSQL container once the service is gone from the compose file;
+# its data volume survives, so a rollback to the previous compose still finds the old database.
+docker compose -p "ms06-$ENV" -f docker-compose.prod.yml up -d --build --remove-orphans
 
 echo "Waiting for http://ms06-$ENV:8086/actuator/health ..."
 for attempt in $(seq 1 30); do

@@ -1,27 +1,8 @@
 # MS06 - Events on the Azure VM (test or production).
-# It is started by infra/deploy.sh, which sets ENV (test|prod) and the variables below.
+# The database does NOT live in this stack: it is a managed instance (RDS) outside the VM, reached through
+# its endpoint with TLS. It is started by infra/deploy.sh, which sets ENV and the variables below.
 # No port is published: only the Caddy edge container (network "campus-edge") reaches MS06.
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: ms06-${ENV}-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: campusseguro_events
-      POSTGRES_USER: campusseguro
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    # Small limits: the VM has 4 GiB and shares it with the edge proxy and the runner.
-    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=30"]
-    mem_limit: 384m
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    networks: [internal]
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U campusseguro -d campusseguro_events"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
   ms06:
     build:
       context: ..
@@ -29,18 +10,17 @@ services:
     image: ms06-events:${ENV}
     container_name: ms06-${ENV}
     restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
     environment:
       # "prod" is any profile other than local/test: it turns on the Gateway identity headers
       # and the real clients (without it the service starts with the local stubs).
       SPRING_PROFILES_ACTIVE: prod
       SERVER_PORT: "8086"
       JAVA_TOOL_OPTIONS: "-Xms128m -Xmx512m"
-      DB_URL: jdbc:postgresql://postgres:5432/campusseguro_events
-      DB_USER: campusseguro
-      DB_PASSWORD: ${DB_PASSWORD}
+      # Managed database (RDS). TLS is mandatory: with `rds.force_ssl=1` an unencrypted
+      # connection is rejected, so the URL must carry `sslmode=require`.
+      DB_URL: ${DB_URL:?DB_URL is required (jdbc:postgresql://<endpoint>:5432/<db>?sslmode=require)}
+      DB_USER: ${DB_USER:?DB_USER is required (ms06_user or ms06_prod)}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       GATEWAY_URL: ${GATEWAY_URL}
       GATEWAY_SERVICE_KEY: ${GATEWAY_SERVICE_KEY}
       GATEWAY_SYSTEM_USER_ID: ${GATEWAY_SYSTEM_USER_ID:-}
@@ -49,15 +29,10 @@ services:
       SCHEDULING_ENABLED: ${SCHEDULING_ENABLED:-false}
     mem_limit: 768m
     networks:
-      internal: {}
       campus-edge:
         # The Caddy edge looks for this name (UPSTREAM_TEST=ms06-test:8086 / UPSTREAM_PROD=ms06-prod:8086).
         aliases: ["ms06-${ENV}"]
 
 networks:
-  internal: {}
   campus-edge:
     external: true
-
-volumes:
-  pgdata: {}
