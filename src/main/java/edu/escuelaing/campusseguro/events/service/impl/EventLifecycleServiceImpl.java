@@ -117,7 +117,14 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
         EventStatePayload scheduled = payload(event, EventStatus.SCHEDULED, scope, roles);
         EventStatePayload draft = payload(event, EventStatus.DRAFT, scope, roles);
 
-        checkIn.pushState(scheduled);
+        // CHI does not stop the scheduling either: an outage of MS04 must not block creating events.
+        // If it does not answer, the event is scheduled anyway and the call is saved to be repeated.
+        try {
+            checkIn.pushState(scheduled);
+        } catch (ExternalServiceUnavailableException ex) {
+            log.warn("CHI did not answer when event {} was scheduled: it will be retried", event.getId());
+            saveFailure(event.getId(), ExternalModule.CHI, ex);
+        }
 
         // BEI does not stop the scheduling: if it does not answer, the event is scheduled anyway and the
         // call is saved to be repeated. The brigadiers may learn about the event late.
@@ -301,10 +308,11 @@ public class EventLifecycleServiceImpl implements EventLifecycleService {
             return false;
         }
         EventEntity event = events.findById(failure.getEventId()).orElse(null);
-        if (event != null && event.getStatus() == EventStatus.SCHEDULED && failure.getModule() == ExternalModule.BEI) {
-            // BEI did not answer when the event was scheduled: send it the Scheduled state now.
+        if (event != null && event.getStatus() == EventStatus.SCHEDULED
+                && (failure.getModule() == ExternalModule.BEI || failure.getModule() == ExternalModule.CHI)) {
+            // CHI or BEI did not answer when the event was scheduled: send it the Scheduled state now.
             EventStatePayload scheduled = payload(event, EventStatus.SCHEDULED, scopeOf(event.getId()), rolesOf(event.getId()));
-            attempt(event.getId(), ExternalModule.BEI, scheduled, automaticActor(event));
+            attempt(event.getId(), failure.getModule(), scheduled, automaticActor(event));
             return failures.findById(failureId).map(row -> !row.isOpen()).orElse(false);
         }
         if (event == null || event.getStatus() != EventStatus.IN_PROGRESS) {

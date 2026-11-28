@@ -171,14 +171,22 @@ class EventLifecycleServiceTest {
     }
 
     @Test
-    void chiDownStopsEverythingAndThrows() {
+    void chiDownSchedulesTheEventAnywayAndKeepsTheCallPending() {
         doThrow(down("MS04")).when(checkIn).pushState(any(EventStatePayload.class));
 
-        assertThrows(ExternalServiceUnavailableException.class, () -> service.schedule(event, scope, roles, actor("coord-1")));
+        SchedulingOutcome outcome = service.schedule(event, scope, roles, actor("coord-1"));
 
-        verify(brigade, never()).pushState(any(EventStatePayload.class));
-        verify(alerts, never()).createAlert(any(AlertCommand.class), any(AlertActor.class));
-        verify(stateService, never()).transition(any(), any(), anyString(), any());
+        assertTrue(outcome.scheduled());
+        assertEquals(2, outcome.alerts().size());
+        verify(brigade).pushState(any(EventStatePayload.class));
+        verify(stateService).transition(event.getId(), EventStatus.SCHEDULED, "coord-1", "Scheduled with all its data");
+        // The failed call is saved so that it is repeated later.
+        ArgumentCaptor<EventStartFailureEntity> saved = ArgumentCaptor.forClass(EventStartFailureEntity.class);
+        verify(failures).save(saved.capture());
+        assertEquals(event.getId(), saved.getValue().getEventId());
+        assertEquals(ExternalModule.CHI, saved.getValue().getModule());
+        assertEquals(1, saved.getValue().getAttempts());
+        assertTrue(saved.getValue().isOpen());
     }
 
     @Test
@@ -410,6 +418,34 @@ class EventLifecycleServiceTest {
         assertEquals(0, service.retryPendingStartCalls());
 
         assertEquals(3, row.getAttempts());
+        assertTrue(row.isOpen());
+    }
+
+    @Test
+    void retrySendsTheScheduledStateToChiWhileTheEventIsStillScheduled() {
+        EventEntity waiting = scheduledEvent(START.plusSeconds(3600));
+        when(events.findById(waiting.getId())).thenReturn(Optional.of(waiting));
+        EventStartFailureEntity row = openFailure(waiting, ExternalModule.CHI, 1);
+
+        assertEquals(1, service.retryPendingStartCalls());
+
+        ArgumentCaptor<EventStatePayload> sent = ArgumentCaptor.forClass(EventStatePayload.class);
+        verify(checkIn).pushState(sent.capture());
+        assertEquals(EventStatus.SCHEDULED, sent.getValue().status());
+        verify(brigade, never()).pushState(any());
+        assertEquals(NOW, row.getResolvedAt());
+    }
+
+    @Test
+    void retryKeepsTheScheduledChiCallOpenWhileChiDoesNotAnswer() {
+        EventEntity waiting = scheduledEvent(START.plusSeconds(3600));
+        when(events.findById(waiting.getId())).thenReturn(Optional.of(waiting));
+        EventStartFailureEntity row = openFailure(waiting, ExternalModule.CHI, 1);
+        doThrow(down("MS04")).when(checkIn).pushState(any());
+
+        assertEquals(0, service.retryPendingStartCalls());
+
+        assertEquals(2, row.getAttempts());
         assertTrue(row.isOpen());
     }
 
